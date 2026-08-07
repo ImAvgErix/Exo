@@ -1,0 +1,189 @@
+'use strict'
+
+/**
+ * Exocord's preload inside the official Discord client.
+ *
+ * Registered through session.registerPreloadScript, so this runs ALONGSIDE
+ * Discord's own preload rather than replacing it. Discord's preload still defines
+ * DiscordNative exactly as it always did, and nothing in this file can stop the
+ * client booting.
+ *
+ * There is deliberately no contextBridge call here for DiscordNative. Exocore
+ * lives in the page's main world and exposes everything the page needs on its
+ * own. ExocordBridge is exposed via contextBridge when isolation is on, or on
+ * window when it is off - settings shell needs IPC for game mode / QoS / stats.
+ */
+
+const path = require('node:path')
+const fs = require('node:fs')
+const Module = require('node:module')
+const net = require('node:net')
+const { webFrame, ipcRenderer, contextBridge } = require('electron')
+
+/*
+ * Keep heavyweight/native extras out of the renderer before Discord asks for
+ * them. This is deliberately done at Node's module boundary instead of rewriting
+ * Discord's webpack source:
+ *
+ * - Krisp is a ~36 MB native model stack. Exocord uses Discord's standard WebRTC
+ *   noise suppressor, so loading Krisp just to keep it disabled wastes memory.
+ * - Discord RPC exposes local TCP and named-pipe servers for game integrations.
+ *   Exocord does not use them. The narrow Server.listen guard lets Discord finish
+ *   its normal initialization, then closes only the documented RPC endpoints.
+ *
+ * Both hooks are exact-name/exact-port. Voice, gateway, media and every other
+ * native module keep the stock path.
+ */
+const originalModuleLoad = Module._load
+Module._load = function (request, parent, isMain) {
+  if (typeof request === 'string' &&
+      /(?:^|[\\/])discord_krisp(?:[\\/]|\.node$|$)/i.test(request)) {
+    const error = new Error('Exocord disabled the Krisp native module')
+    error.code = 'EXOCORD_MODULE_DISABLED'
+    throw error
+  }
+  return originalModuleLoad.call(this, request, parent, isMain)
+}
+
+const originalServerListen = net.Server.prototype.listen
+net.Server.prototype.listen = function (...args) {
+  const target = args[0]
+  const port = typeof target === 'number'
+    ? target
+    : (target && typeof target === 'object' ? Number(target.port) : NaN)
+  const pipe = typeof target === 'string'
+    ? target
+    : (target && typeof target === 'object' ? target.path : null)
+  const isDiscordRpc = (Number.isInteger(port) && port >= 6463 && port <= 6472) ||
+    (typeof pipe === 'string' && /discord-ipc-\d+/i.test(pipe))
+
+  const result = originalServerListen.apply(this, args)
+  if (isDiscordRpc) {
+    this.once('listening', () => {
+      try { this.close() } catch { /* it closed itself first */ }
+    })
+  }
+  return result
+}
+
+const ExocordBridge = Object.freeze({
+  getSettings: () => ipcRenderer.invoke('exocord:getSettings'),
+  setSetting: (key, value) => ipcRenderer.invoke('exocord:setSetting', key, value),
+  stats: () => ipcRenderer.invoke('exocord:stats'),
+  relaunch: () => ipcRenderer.invoke('exocord:relaunch'),
+  qosStatus: () => ipcRenderer.invoke('exocord:qos:status'),
+  qosApply: () => ipcRenderer.invoke('exocord:qos:apply')
+})
+
+try {
+  contextBridge.exposeInMainWorld('ExocordBridge', ExocordBridge)
+} catch {
+  // contextIsolation off: same world as the page.
+  try { globalThis.ExocordBridge = ExocordBridge } catch { /* ignore */ }
+}
+
+/**
+ * Exocore must land before Discord's bundle: it installs a property setter on
+ * window.webpackChunkdiscord_app to capture the main webpack instance on its first
+ * assignment. Running late gets a secondary instance with none of the app's stores.
+ *
+ */
+function readRenderer (rel) {
+  const file = path.join(__dirname, '..', 'renderer', rel)
+  try {
+    if (fs.existsSync(file)) return fs.readFileSync(file, 'utf8')
+  } catch { /* missing */ }
+  return ''
+}
+
+const exocoreSrc = readRenderer(path.join('exocore', 'exocore.js'))
+const settingsShellSrc = readRenderer(path.join('exocore', 'settings-shell.js'))
+const chromeShellSrc = readRenderer(path.join('exocore', 'chrome-shell.js'))
+const railShellSrc = readRenderer(path.join('exocore', 'rail-shell.js'))
+const chatShellSrc = readRenderer(path.join('exocore', 'chat-shell.js'))
+const voiceShellSrc = readRenderer(path.join('exocore', 'voice-shell.js'))
+const channelShellSrc = readRenderer(path.join('exocore', 'channel-shell.js'))
+const modalShellSrc = readRenderer(path.join('exocore', 'modal-shell.js'))
+const visualHooksSrc = readRenderer(path.join('exocore', 'ui', 'visual-hooks.js'))
+const toolsRegistrySrc = readRenderer(path.join('exocore', 'tools', 'registry.js'))
+const toolFiles = [
+  'fake-nitro.js',
+  'limitless-screenshare.js',
+  'search-fix.js',
+  'volume-booster.js',
+  'message-logger.js',
+  'no-nitro-upsell.js',
+  'always-trust.js',
+  'valid-reply.js',
+  'ignore-activities.js',
+  'no-pending-count.js',
+  'no-profile-themes.js',
+  'no-system-badge.js',
+  'no-typing-animation.js',
+  'hide-chat-buttons.js',
+  'notification-volume.js',
+  'quick-reply.js',
+  'no-reply-mention.js',
+  'character-counter.js',
+  'keep-current-channel.js',
+  'stop-auto-unread.js',
+  'disable-call-idle.js',
+  'game-activity-toggle.js',
+  'member-count.js',
+  'read-all-notifications.js',
+  'crash-handler.js',
+  'image-zoom.js',
+  'view-icons.js',
+  'anonymise-file-names.js'
+].map(name => readRenderer(path.join('exocore', 'tools', name))).filter(Boolean)
+
+if (exocoreSrc) {
+  // Exocore first (webpack capture), then tools registry + product shells.
+  const bootstrap = `
+    window.__EXOCORD_NATIVE_GUARDS__ = Object.freeze({
+      krispModule: true,
+      localRpc: true
+    });
+  ` + exocoreSrc +
+    (toolsRegistrySrc ? ('\n;' + toolsRegistrySrc) : '') +
+    toolFiles.map(src => '\n;' + src).join('') +
+    (settingsShellSrc ? ('\n;' + settingsShellSrc) : '') +
+    (chromeShellSrc ? ('\n;' + chromeShellSrc) : '') +
+    (railShellSrc ? ('\n;' + railShellSrc) : '') +
+    (chatShellSrc ? ('\n;' + chatShellSrc) : '') +
+    (voiceShellSrc ? ('\n;' + voiceShellSrc) : '') +
+    (channelShellSrc ? ('\n;' + channelShellSrc) : '') +
+    (modalShellSrc ? ('\n;' + modalShellSrc) : '') +
+    (visualHooksSrc ? ('\n;' + visualHooksSrc) : '')
+  webFrame.executeJavaScript(bootstrap).then(() => {
+    try { console.info('[exocord] renderer bootstrap ok', bootstrap.length) } catch { /* */ }
+  }).catch(err => {
+    try { console.error('[exocord] renderer bootstrap failed', err && err.message) } catch { /* */ }
+  })
+}
+
+// Global mute/deafen, relayed from the main process.
+ipcRenderer.on('exocord:hotkey', (_event, action) => {
+  webFrame.executeJavaScript(`
+    (function () {
+      if (!window.Exocore) return;
+      return ${JSON.stringify(action)} === 'mute'
+        ? Exocore.toggleMute()
+        : Exocore.toggleDeafen();
+    })();
+  `).catch(() => {})
+})
+
+// Inject builds: Ctrl+Shift+E opens the in-page settings shell, not the
+// BrowserView panel (which does not composite above Discord's page).
+ipcRenderer.on('exocord:settings-toggle', () => {
+  webFrame.executeJavaScript(`
+    (function () {
+      if (window.Exocore && typeof Exocore.toggleSettings === 'function') return Exocore.toggleSettings();
+      if (window.ExocordSettingsShell && typeof ExocordSettingsShell.toggle === 'function') {
+        return ExocordSettingsShell.toggle();
+      }
+      return false;
+    })();
+  `).catch(() => {})
+})

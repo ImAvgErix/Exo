@@ -1,0 +1,120 @@
+{
+ "Success": "1",
+ "IDS": [
+  {
+   "downloadInfo": {
+    "Success": "1",
+    "ID": "274187",
+    "DownloadTypeID": "1",
+    "DownloadStatusID": "3",
+    "Name": "GeForce%20Game%20Ready%20Driver",
+    "NameLocalized": "GeForce%20Game%20Ready%20Driver",
+    "ShortDescription": "GeForce%20Game%20Ready%20Driver",
+    "DeviceToProductFamilyName": "",
+    "Release": "610",
+    "Version": "610.74",
+    "DisplayVersion": "",
+    "GFE_DisplayVersion": "11.0.7.247",
+    "IsBeta": "0",
+    "IsWHQL": "1",
+    "IsRecommended": "0",
+    "IsFeaturePreview": "0",
+    "IsNewest": "0",
+    "IsDC": "1",
+    "IsCRD": "0",
+    "HasNetInst": "0",
+    "CudaToolkitVersion": "",
+    "IsArchive": "0",
+    "IsActive": "1",
+    "IsEmailRequired": "0",
+    "ReleaseDateTime": "Tue Jul 07, 2026",
+    "DetailsURL": "https://www.nvidia.com/en-us/drivers/details/274187/",
+    "DownloadURL": "https://us.download.nvidia.com/Windows/610.74/610.74-desktop-win10-win11-64bit-international-dch-whql.exe",
+    "DownloadURLFileSize": "979.17 MB",
+    "LanguageName": "English%20(US)",
+    "OSName": "Windows%2011",
+    "OsCode": "10.0",
+    "Is64Bit": "1",
+    "series": [
+     {
+      "seriesname": "GeForce%20RTX%2050%20Series",
+      "products": [
+       {
+        "productName": "NVIDIA%20GeForce%20RTX%205090"
+       },
+       {
+        "productName": "NVIDIA%20GeForce%20RTX%205080"
+       },
+       {
+        "productName": "NVIDIA%20GeForce%20RTX%205070%20Ti"
+       },
+       {
+        "productName": "NVIDIA%20GeForce%20RTX%205070"
+       }
+      ]
+     },
+     {
+      "seriesname": "GeForce%20RTX%2040%20Series",
+      "products": [
+       {
+        "productName": "NVIDIA%20GeForce%20RTX%204090"
+       },
+       {
+        "productName": "NVIDIA%20GeForce%20RTX%204080%20SUPER"
+       },
+       {
+        "productName": "NVIDIA%20GeForce%20RTX%204070"
+       },
+       {
+        "productName": "NVIDIA%20GeForce%20RTX%204060"
+       }
+      ]
+     },
+     {
+      "seriesname": "GeForce%2016%20Series",
+      "products": [
+       {
+        "productName": "GeForce%20GTX%201660%20SUPER"
+       },
+       {
+        "productName": "GeForce%20GTX%201650"
+       }
+      ]
+     },
+     {
+      "seriesname": "GeForce%20RTX%2030%20Series",
+      "products": [
+       {
+        "productName": "GeForce%20RTX%203090%20Ti"
+       },
+       {
+        "productName": "GeForce%20RTX%203090"
+       },
+       {
+        "productName": "GeForce%20RTX%203080%20Ti"
+       },
+       {
+        "productName": "GeForce%20RTX%203080"
+       },
+       {
+        "productName": "GeForce%20RTX%203070%20Ti"
+       },
+       {
+        "productName": "GeForce%20RTX%203070"
+       },
+       {
+        "productName": "GeForce%20RTX%203060%20Ti"
+       },
+       {
+        "productName": "GeForce%20RTX%203060"
+       },
+       {
+        "productName": "GeForce%20RTX%203050"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -1,0 +1,1020 @@
+/**
+ * Exocord redesign layer - the design system pass.
+ *
+ * Loads after quickcss/declutter/status so it can refine what they set, and
+ * before toprail so the rail's structural rules keep the last word on layout.
+ * Everything here is presentation: geometry, rhythm, motion, colour. Structural
+ * hiding stays in declutter; this file makes what remains look designed rather
+ * than left over.
+ *
+ * Every colour comes from the --exo-* tokens defined in quickcss §0, and every
+ * dimension from §0c. Nothing in this file invents a grey, a row height or a
+ * type size of its own; if one needs to change, it changes there once. A
+ * literal here is a bug unless a comment next to it says what was measured.
+ *
+ * The system:
+ *   - Two shapes: circles for people, Discord's native squircle for places.
+ *     (A circle clip on guild icons turned dark square logos into unreadable
+ *     black discs - measured complaint, reverted here by overriding the
+ *     quickcss clip.)
+ *   - One radius: --exo-radius on everything interactive. --exo-radius-sm is
+ *     reserved for surfaces nested inside an already-rounded one (menu items,
+ *     tooltips), where two 8px curves 4px apart fight each other.
+ *   - One rhythm: --exo-row-md for any row with a face in it (DMs, members,
+ *     friends), --exo-row-sm for rows without one (channels, menu items,
+ *     settings nav, tabs), --exo-gutter inside and beside rows,
+ *     --exo-inset for section insets.
+ *   - Three surfaces: --exo-bg columns, --exo-raised floating, --exo-well
+ *     inputs. Separation by --exo-hairline, never by shadow.
+ *   - One selection signal: --exo-selected wash plus a 2px --exo-selected-edge
+ *     inside the corner. Sidebar rows, Friends tabs and settings nav all use
+ *     it, so "selected" never means two different things on one screen.
+ *   - One accent: --exo-accent marks "on" and nothing else (§15b).
+ *   - Motion: instant layout, --exo-fast opacity entries for floating
+ *     surfaces, --exo-fast colour hovers on --exo-ease. Nothing animates size
+ *     or position, so nothing can jank layout.
+ */
+
+/* ---------------------------------------------------------------------------
+ * 1. Guild icons return to the native squircle. The circle clip is undone
+ * (clip-path only ever came from Exocord), which restores Discord's own mask
+ * geometry, badge notch included. The home tile keeps its circle - it is a
+ * logo on a plain tile, not artwork that can be cropped.
+ * ------------------------------------------------------------------------- */
+nav:is([aria-label="Servers sidebar"], [data-exocord-rail]) foreignObject {
+    clip-path: none !important;
+}
+
+html[data-exocord-toprail] [data-list-item-id="guildsnav___home"] svg foreignObject {
+    clip-path: circle(50%) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 2. Motion. The 0.01ms global clamp stays (quickcss) - layout never waits.
+ * Floating surfaces get a single fast entry: opacity+scale, GPU-composited,
+ * finished in 110ms. That is what reads as "smooth" without ever blocking a
+ * click. No exit animations: closing must always be instant.
+ * ------------------------------------------------------------------------- */
+@keyframes exo-enter {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+/* Opacity only, and only on the ROOT of a floating surface. The first version
+ * animated `div[class*="popout"]` - a substring that also matches wrapper
+ * elements, so nested surfaces animated twice and read as flicker - and it
+ * scaled/translated, which fights Discord's own positioning math while a
+ * popout is being anchored. Tooltips get NO entry animation at all: they
+ * follow the pointer, and 110ms of fade on every hover reads as input lag. */
+[role="menu"][class*="menu_"],
+div[class*="quickswitcher"],
+[role="dialog"] > div:first-child {
+    animation: exo-enter 90ms var(--exo-ease, ease-out) !important;
+    animation-iteration-count: 1 !important;
+}
+
+/* Hover/selected feedback fades in rather than snapping. Color-only
+ * transitions cannot invalidate layout. Deliberately NOT on the rail's
+ * [data-list-item-id] slots or on opacity: fading guild icons and avatar
+ * presence-opacity underneath a pointer reads as mush, not fluidity. */
+button,
+[role="button"],
+[role="tab"],
+a[href^="/channels/"],
+[class*="interactive"],
+[data-exocord-friends-settings] {
+    transition-property: background-color, color, border-color !important;
+    transition-duration: 90ms !important;
+    transition-timing-function: var(--exo-ease, ease-out) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 3. Account panel: one 52px strip, fixed over the sidebar, same centerline.
+ * Declutter hides subtext/settings; this file alone owns place, size, surface.
+ * ------------------------------------------------------------------------- */
+section[aria-label="User status and settings"] {
+    position: fixed !important;
+    left: var(--exo-gutter) !important;
+    bottom: var(--exo-gutter) !important;
+    /* The sidebar track minus the 8px inset on each side. Derived from the
+     * token exocore.js also writes into the grid, so a sidebar width change
+     * moves the panel with it instead of stranding it 16px short. */
+    width: calc(var(--exo-sidebar-w) - (var(--exo-gutter) * 2)) !important;
+    height: var(--exo-row-panel) !important;
+    min-height: var(--exo-row-panel) !important;
+    z-index: var(--exo-z-panel) !important;
+    box-sizing: border-box !important;
+    border: 1px solid var(--exo-hairline) !important;
+    border-radius: var(--exo-radius) !important;
+    background: var(--exo-well) !important;
+}
+
+section[aria-label="User status and settings"] [class*="container__37e49"] {
+    height: var(--exo-row-panel) !important;
+    min-height: var(--exo-row-panel) !important;
+    display: flex !important;
+    align-items: center !important;
+    /* Left padding puts this avatar on the same column as every DM-row avatar
+     * above it. The row's own 8px gutter is already inside the panel border,
+     * so the inset here is the shared icon column minus that gutter. */
+    padding: 0 10px 0 calc(var(--exo-col-icon) - var(--exo-gutter) + 1px) !important;
+    gap: var(--exo-gutter) !important;
+}
+
+section[aria-label="User status and settings"] [class*="avatarWrapper"] {
+    display: flex !important;
+    align-items: center !important;
+    margin: 0 !important;
+}
+
+/* The avatar's clickable wrapper ships with 5px top padding and a 42px box,
+ * which is what floated the 40px avatar below the strip's centerline. */
+section[aria-label="User status and settings"] [class*="accountPopoutButtonWrapper"] {
+    display: flex !important;
+    align-items: center !important;
+    height: var(--exo-row-md) !important;
+    padding: 0 !important;
+}
+
+section[aria-label="User status and settings"] [class*="accountPopoutButtonWrapper"] [class*="avatar_"] {
+    display: flex !important;
+    align-items: center !important;
+    height: var(--exo-row-md) !important;
+}
+
+section[aria-label="User status and settings"] [class*="nameTag"] {
+    display: flex !important;
+    align-items: center !important;
+    align-self: center !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+section[aria-label="User status and settings"] [class*="buttons"] {
+    display: flex !important;
+    align-items: center !important;
+    margin-left: auto !important;
+    gap: 2px !important;
+}
+
+/* Sits above the panel it belongs to, right-aligned with its edge. exocore.js
+ * appends this bare <span> and applies no styling of its own, so everything
+ * it looks like is here. */
+#exocord-call-timer {
+    position: absolute !important;
+    right: var(--exo-gutter) !important;
+    top: -22px !important;
+    z-index: 4 !important;
+    padding: 2px 7px !important;
+    border: 1px solid var(--exo-hairline) !important;
+    border-radius: var(--exo-radius-sm) !important;
+    background: var(--exo-well) !important;
+    color: var(--exo-text-3) !important;
+    font-size: var(--exo-type-xs) !important;
+    font-variant-numeric: tabular-nums !important;
+    line-height: 16px !important;
+    pointer-events: none !important;
+}
+
+/* Clearance for the fixed panel, derived from its height so the two can never
+ * drift apart. Both scrollers use the same token: they are occluded by the
+ * same element, and two hand-tuned magic clearances is how one list ends up
+ * with a trapped last row. */
+nav[aria-label$="(server)"] [class*="scroller"] {
+    padding-bottom: var(--exo-panel-clearance) !important;
+    scroll-padding-bottom: var(--exo-panel-clearance) !important;
+    box-sizing: border-box !important;
+}
+
+/* Friends Settings proxy - paint lives here; declutter only keeps it clickable. */
+[data-exocord-friends-settings] {
+    height: var(--exo-row-sm) !important;
+    min-height: var(--exo-row-sm) !important;
+    margin-left: 4px !important;
+    padding: 0 10px !important;
+    flex: 0 0 auto !important;
+    border-radius: var(--exo-radius) !important;
+    color: var(--interactive-normal) !important;
+    background: var(--background-mod-subtle) !important;
+}
+
+[data-exocord-friends-settings]:hover {
+    color: var(--interactive-hover) !important;
+    background: var(--background-mod-normal) !important;
+}
+
+/* Containers stay square; search bars join the 8px interactive system. */
+[class*="sidebarListRounded"] {
+    border-radius: 0 !important;
+}
+
+div[class*="searchBar_"],
+div[class*="searchBar__"] {
+    border-radius: var(--exo-radius) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 4. Profile card - popout and DM sidebar share one designed layout:
+ * centered identity block, quiet divider, actions aligned. This is what turns
+ * "everything hidden" into "deliberately minimal".
+ * ------------------------------------------------------------------------- */
+/* Current builds name these surfaces in kebab case: user-profile-popout and
+ * user-profile-sidebar. The camelCase userPopout is kept for older markup. */
+:is([class*="userPopout"], [class*="user-profile-popout"], [class*="user-profile-sidebar"]) [class*="avatarPositioner"],
+:is([class*="userPopout"], [class*="user-profile-popout"], [class*="user-profile-sidebar"]) [class*="avatarWrapper"] {
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+:is([class*="userPopout"], [class*="user-profile-popout"], [class*="user-profile-sidebar"])
+    :is([class*="displayName"], [class*="displayNameRow"], [class*="nickname"], [class*="userTag"]) {
+    text-align: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+}
+
+:is([class*="userPopout"], [class*="user-profile-popout"], [class*="user-profile-sidebar"]) [class*="body_"] {
+    padding: 12px 16px 16px !important;
+}
+
+:is([class*="userPopout"], [class*="user-profile-popout"], [class*="user-profile-sidebar"]) [class*="body_"] section {
+    text-align: center !important;
+}
+
+/* "Last song stuck in your head?" and any other add-status nudge bubble is an
+ * upsell for a feature Exocord hides everywhere else. */
+:is([class*="userPopout"], [class*="user-profile-popout"], [class*="user-profile-sidebar"])
+    :is([class*="addStatusPrompt"], [class*="referenceContainer"]) {
+    display: none !important;
+}
+
+/* Bio text stays readable: centered heading treatment, left-aligned prose
+ * only when it wraps to multiple lines is not distinguishable in CSS, so
+ * center consistently - profile bios are short by design here. */
+
+/* The Direct Messages header text joins the shared icon column; a section
+ * label flush against the pane edge reads as a layout accident. */
+[class*="privateChannelsHeaderContainer"] {
+    padding-left: var(--exo-col-icon) !important;
+    padding-right: var(--exo-inset) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 5. Row rhythm. Anything with a face in it - DMs, members, friends - is one
+ * --exo-row-md tall on an --exo-row-lg pitch, with the same 8px radius and the
+ * same 8px gutter to its list edge. Before this was tokenised the three lists
+ * ran 40/40/44 with margins of "2px 0", "1px 8px" and "2px 8px", which is why
+ * the edges never quite lined up where two lists met.
+ * ------------------------------------------------------------------------- */
+nav[class*="privateChannels"] li[class*="channel"] {
+    height: var(--exo-row-lg) !important;
+    min-height: var(--exo-row-lg) !important;
+    padding: 0 var(--exo-gutter) !important;
+    box-sizing: border-box !important;
+}
+
+nav[class*="privateChannels"] li[class*="channel"] > [class*="interactive"],
+nav[class*="privateChannels"] a[href^="/channels/@me/"] {
+    height: var(--exo-row-md) !important;
+    min-height: var(--exo-row-md) !important;
+    margin: 2px 0 !important;
+    border-radius: var(--exo-radius) !important;
+    box-sizing: border-box !important;
+}
+
+/* Member list rows match. The 2px vertical margin is the same pitch as the DM
+ * rows above; the horizontal gutter is carried here because member rows have
+ * no outer <li> to carry it for them. */
+[class*="membersWrap"] [class*="member_"] {
+    height: var(--exo-row-md) !important;
+    min-height: var(--exo-row-md) !important;
+    margin: 2px var(--exo-gutter) !important;
+    padding: 0 var(--exo-gutter) !important;
+    border-radius: var(--exo-radius) !important;
+    box-sizing: border-box !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 6. Friends header: title, tabs and settings proxy on one 32px line with
+ * pill tabs that match the sidebar's Friends shortcut.
+ * ------------------------------------------------------------------------- */
+main[aria-label="Friends"] [class*="tabBar"] {
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+}
+
+/* Selected tab takes the same wash and the same white edge as a selected row -
+ * see §16. It used a 0.16 wash and no edge, which made "selected" mean one
+ * thing in the sidebar and a different thing eight pixels away. */
+main[aria-label="Friends"] [role="tab"][aria-selected="true"] {
+    background: var(--exo-selected) !important;
+    box-shadow: inset 2px 0 0 var(--exo-selected-edge) !important;
+    color: var(--exo-text) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 7. Chat surface polish. The channel header is gone (declutter); the message
+ * list starts flush at the top with a quiet 8px inset instead of a ragged
+ * edge. The input keeps the shared radius and a hairline instead of a heavy
+ * border.
+ * ------------------------------------------------------------------------- */
+[class*="channelTextArea"] {
+    border: 1px solid var(--exo-hairline) !important;
+    background: var(--exo-well) !important;
+}
+
+main[class*="chatContent"] [data-list-id="chat-messages"] {
+    padding-top: var(--exo-gutter) !important;
+}
+
+/* ===========================================================================
+ * FULL OVERHAUL PASS
+ *
+ * One elevation scale in blacks - the whole client uses exactly three
+ * surfaces, so nothing floats on a random grey again:
+ *   --exo-bg       structural columns (rails, sidebars, chat, settings nav)
+ *   --exo-raised   floating surfaces (menus, popouts, modals, pickers)
+ *   --exo-well     inputs and wells
+ * Separation comes from --exo-hairline, never from shadows. The values
+ * themselves live in quickcss §0; this file only reads them.
+ * ======================================================================== */
+
+/* ---------------------------------------------------------------------------
+ * 8. Server channel sidebar: one text column at 16px, quiet categories,
+ * 32px channel rows on a 36px pitch - the same rhythm as DMs and members.
+ * ------------------------------------------------------------------------- */
+nav[aria-label$="(server)"] [class*="header_"] {
+    height: 48px !important;
+    min-height: 48px !important;
+    padding: 0 var(--exo-inset) !important;
+    background: var(--exo-bg) !important;
+    box-shadow: none !important;
+    border-bottom: 1px solid var(--exo-hairline) !important;
+}
+
+/* Category headers: small, muted, aligned to the same column as the server
+ * name above and the channel text below. */
+nav[aria-label$="(server)"] [class*="containerDefault__29444"] {
+    padding-top: var(--exo-inset) !important;
+}
+
+/* Categories sit on the shared icon column, so section labels and channel
+ * glyphs form one left edge and channel text forms the second. The row's own
+ * 8px gutter is already applied, so this makes up the difference. */
+nav[aria-label$="(server)"] [class*="name__29444"] {
+    padding-left: 0 !important;
+    margin-left: calc(var(--exo-col-icon) - var(--exo-inset)) !important;
+    color: var(--exo-text-3) !important;
+}
+
+/* Every row in the channel sidebar, on one rhythm and one left edge.
+ *
+ * This was the single biggest reason the sidebar read as sloppy. A live audit
+ * of one server measured FIVE row heights (34 utility, 40 category, 38 channel
+ * wrapper, 32 channel link, 34 voice) and TWO icon columns (x=16 for utility
+ * and voice rows, x=24 for text channels). Two causes, both fixed here:
+ *
+ *   1. The old selector required href^="/channels/". VOICE channels have no
+ *      href - they are click handlers - so every voice row silently missed the
+ *      rule and kept Discord's native geometry, which is where the second icon
+ *      column came from. Matching the data-list-item-id instead catches text,
+ *      voice, stage and announcement rows alike.
+ *   2. The rule added an 8px side margin on top of the 8px its parent wrapper
+ *      already carries, pushing text channels to x=16 while voice and utility
+ *      rows sat at x=8. The gutter belongs to the wrapper; this no longer adds
+ *      a second one.
+ *
+ * Result: one 32px row on a 36px pitch, one icon column, every row type. */
+nav[aria-label$="(server)"] a[data-list-item-id^="channels___"],
+nav[aria-label$="(server)"] div[role="treeitem"][data-list-item-id^="channels___"],
+/* Server Guide / Events / Browse Channels / Members - same list, and the only
+   rows Discord's own 34px height still governed. */
+nav[aria-label$="(server)"] li > div[class*="containerDefault"] {
+    height: var(--exo-row-sm) !important;
+    min-height: var(--exo-row-sm) !important;
+    margin: 2px 0 !important;
+    padding: 0 var(--exo-gutter) !important;
+    border-radius: var(--exo-radius) !important;
+    box-sizing: border-box !important;
+}
+
+/* The <li> wrappers carry Discord's own spacing on top of the row heights
+   above - that is where 38px-for-a-32px-row came from. */
+nav[aria-label$="(server)"] li {
+    margin: 0 !important;
+}
+
+/* The sidebar's Boost Goal banner is a progress bar for buying Discord a
+ * server subsidy. container__0d0f9 is a build hash; if it rots the banner
+ * returns and nothing breaks. */
+nav[aria-label$="(server)"] :is([class*="container__0d0f9"], [class*="containerWithMargin"]) {
+    display: none !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 9. Chat rhythm. Discord separates message groups by 17px; 12px keeps the
+ * grouping legible and fits ~15% more conversation on screen. Date dividers
+ * become quiet rules instead of loud labels.
+ * ------------------------------------------------------------------------- */
+[data-list-id="chat-messages"] [class*="groupStart"] {
+    margin-top: 12px !important;
+}
+
+/* Date dividers become quiet rules. The :not() guards are load-bearing: the
+ * unread "New messages" bar is also a divider, and dimming it to 0.6 on pure
+ * black takes the one marker that tells you where you stopped reading and
+ * makes it the faintest thing in the channel. Discord marks that variant with
+ * isUnread/unreadDivider depending on build, so both are excluded. */
+[data-list-id="chat-messages"] [class*="divider"]:not([class*="isUnread"]):not([class*="unread"]) {
+    opacity: 0.6 !important;
+}
+
+/* Message hover feedback joins the shared fade system. */
+[class*="cozyMessage"] {
+    transition-property: background-color !important;
+    transition-duration: var(--exo-fast) !important;
+    transition-timing-function: var(--exo-ease, ease-out) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 10. Member list: rows share the 40px rhythm (set above); group headers sit
+ * in the same text column as the rows beneath them.
+ * ------------------------------------------------------------------------- */
+[class*="membersWrap"] [class*="membersGroup"] {
+    display: flex !important;
+    align-items: baseline !important;
+    gap: 4px !important;
+    white-space: nowrap !important;
+    padding: 12px var(--exo-gutter) 4px var(--exo-inset) !important;
+    height: auto !important;
+    color: var(--exo-text-3) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 11. Context menus: floating-black, hairline, compact 32px items. Discord
+ * ships 44px menu rows with zero padding on a grey card; that is a different
+ * app's design language.
+ * ------------------------------------------------------------------------- */
+[role="menu"][class*="menu_"] {
+    background: var(--exo-raised) !important;
+    border: 1px solid var(--exo-hairline) !important;
+    border-radius: var(--exo-radius) !important;
+    padding: 4px !important;
+    box-shadow: none !important;
+}
+
+/* Items take the SMALL radius, and this is the one place the small radius is
+ * used in the injected client: an 8px corner nested directly inside another
+ * 8px corner with only 4px of padding between them reads as two fighting
+ * curves. Everything not nested inside a rounded surface takes --exo-radius. */
+[role="menu"] [role="menuitem"],
+[role="menu"] [role="menuitemcheckbox"],
+[role="menu"] [role="menuitemradio"] {
+    min-height: var(--exo-row-sm) !important;
+    height: auto !important;
+    padding: 4px var(--exo-gutter) !important;
+    border-radius: var(--exo-radius-sm) !important;
+    box-sizing: border-box !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 12. Modals, popouts, pickers: the floating surface, everywhere.
+ * ------------------------------------------------------------------------- */
+:is(
+    [class*="modal_"],
+    [class*="root_"][class*="fullscreenOnMobile"],
+    [class*="quickswitcher"],
+    div[class*="popout_"],
+    [class*="user-profile-popout"]
+) {
+    background: var(--exo-raised) !important;
+    border: 1px solid var(--exo-hairline) !important;
+    border-radius: var(--exo-radius) !important;
+    box-shadow: none !important;
+}
+
+/* Dim the app behind a modal enough that the modal reads as the surface. */
+[class*="backdrop_"] {
+    background: var(--exo-scrim) !important;
+}
+
+/* Tooltips: small, quiet, instant.
+ *
+ * They take --exo-well rather than --exo-raised, which looks like a break in
+ * the elevation scale and is not. A tooltip is the only surface that can be
+ * drawn on top of ANY other surface, including a menu or a modal that is
+ * already --exo-raised - and two #050505 cards separated by one 6%-white
+ * hairline is not a readable stack on black. The well tone is the top of the
+ * scale here, not a well: nothing ever floats above a tooltip, so nothing
+ * inherits the ambiguity. */
+div[class*="tooltip"] {
+    background: var(--exo-well) !important;
+    border: 1px solid var(--exo-hairline-strong) !important;
+    border-radius: var(--exo-radius-sm) !important;
+    box-shadow: none !important;
+    font-size: var(--exo-type-sm) !important;
+    padding: 4px var(--exo-gutter) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 13. The new modal Settings UI (sidebar__409aa generation). Discord draws it
+ * as a grey sheet; it becomes the same black column + hairline system as the
+ * rest of the client. Hashes are from the live 1.0.9249 client; when they
+ * rot, settings falls back to stock grey and nothing breaks.
+ * ------------------------------------------------------------------------- */
+[role="dialog"] [class*="sidebar__409aa"] {
+    background: var(--exo-bg) !important;
+    border-right: 1px solid var(--exo-hairline) !important;
+}
+
+[role="dialog"] [class*="nav__409aa"] :is(a, button, [role="tab"]) {
+    min-height: var(--exo-row-sm) !important;
+    border-radius: var(--exo-radius) !important;
+}
+
+/* Selected settings tab gets the one selection signal, same as a channel row
+ * and a Friends tab. Discord marks it with aria-selected on the tab role and
+ * with a hashed "selected" class on the anchor generation, so both are read. */
+[role="dialog"] [class*="nav__409aa"] :is([role="tab"][aria-selected="true"], [class*="selected"]) {
+    background: var(--exo-selected) !important;
+    box-shadow: inset 2px 0 0 var(--exo-selected-edge) !important;
+    color: var(--exo-text) !important;
+}
+
+[role="dialog"] [class*="breadcrumbsNav"] {
+    background: transparent !important;
+    box-shadow: none !important;
+    border-bottom: 1px solid var(--exo-hairline) !important;
+}
+
+/* Settings upsell rows. The new nav replaces data-tab-id with
+ * data-settings-sidebar-item and stable snake_case ids - enumerated live.
+ * Nitro/Boost/Gift are purchases; Game Overlay is force-disabled by Exocore
+ * and its settings page is the one way to turn it back on. Subscriptions and
+ * Billing stay: they manage money already spent. */
+[data-settings-sidebar-item="nitro_panel"],
+[data-settings-sidebar-item="premium_guild_subscriptions_panel"],
+[data-settings-sidebar-item="gift_panel"],
+[data-settings-sidebar-item="overlay_panel"] {
+    display: none !important;
+}
+
+/* ===========================================================================
+ * IDENTITY. This is what makes the client stop reading as "Discord with
+ * tweaks": its own typeface, no blurple anywhere, monochrome controls.
+ * ======================================================================== */
+
+/* ---------------------------------------------------------------------------
+ * 14. Typography: Segoe UI Variable - the Windows 11 native face. Zero
+ * download, renders beautifully on this OS, and is instantly not gg sans.
+ * ------------------------------------------------------------------------- */
+:root {
+    --font-primary: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif !important;
+    --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif !important;
+    --font-headline: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif !important;
+    --font-code: "Cascadia Code", "Cascadia Mono", Consolas, monospace !important;
+}
+
+body {
+    font-family: var(--font-primary) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 15. Kill blurple. Discord derives every brand surface from the --brand
+ * scale plus a few semantic tokens; repointing them makes buttons, toggles,
+ * selected states, mentions and focus rings monochrome in one move.
+ * Links keep a desaturated blue - a link that isn't distinguishable is a
+ * usability regression, not a design choice.
+ * ------------------------------------------------------------------------- */
+:root,
+.theme-dark,
+.theme-midnight {
+    --brand-260: hsl(0 0% 85% / 1) !important;
+    --brand-500: hsl(0 0% 16% / 1) !important;
+    --brand-560: hsl(0 0% 22% / 1) !important;
+    --brand-600: hsl(0 0% 26% / 1) !important;
+    --bg-brand: hsl(0 0% 16% / 1) !important;
+    --button-filled-brand-background: hsl(0 0% 14% / 1) !important;
+    --button-filled-brand-background-hover: hsl(0 0% 20% / 1) !important;
+    --button-filled-brand-background-active: hsl(0 0% 24% / 1) !important;
+    --text-brand: hsl(0 0% 88% / 1) !important;
+    --control-brand-foreground: hsl(0 0% 88% / 1) !important;
+    --focus-primary: hsl(0 0% 100% / 0.6) !important;
+    /* Same wash as a selected row, on purpose: a mentioning row and a selected
+     * row are both "this one matters" and must not compete as two intensities
+     * of the same white. The selected row is told apart by its 2px edge. */
+    --mention-background: var(--exo-selected) !important;
+    --mention-foreground: var(--exo-text) !important;
+    --text-link: var(--exo-link) !important;
+    /* Discord carries TWO brand background tokens; --background-brand is the
+     * one the Friends Add Friend pill actually reads - measured still-blurple
+     * after --bg-brand alone was remapped. The 3xx/4xx steps cover hover and
+     * text-on-brand derivations. */
+    --background-brand: hsl(0 0% 16% / 1) !important;
+    --brand-330: hsl(0 0% 78% / 1) !important;
+    --brand-360: hsl(0 0% 72% / 1) !important;
+    --brand-430: hsl(0 0% 60% / 1) !important;
+    --brand-460: hsl(0 0% 50% / 1) !important;
+}
+
+/* Belt and braces for the Add Friend pill: if a future build reads yet
+ * another token, the class fallback keeps it monochrome. Values come from the
+ * same tokens the remap above uses, so the fallback cannot drift into being a
+ * fourth near-identical grey the way a hand-typed hsl() pair did. */
+main[aria-label="Friends"] [class*="addFriend"] {
+    background: var(--button-filled-brand-background) !important;
+    border: 1px solid var(--exo-hairline) !important;
+    color: var(--exo-text) !important;
+}
+
+/* Filled buttons carry a hairline so a dark button on a dark surface still
+ * has an edge. */
+button[class*="filledBrand"],
+button[class*="lookFilled"] {
+    border: 1px solid var(--exo-hairline) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 15b. One accent, one red, one amber.
+ *
+ * §15 took the brand monochrome, but Discord's SEMANTIC colours were still
+ * its own: a greener green on voice speaking rings and "connected" text, a
+ * different red on every mention badge and error, a yellow of its own for
+ * warnings. Those were the last non-Exocord hues in the client. They now read
+ * the product tokens - the same green the panel lights for "on", the same red
+ * everywhere red appears, the same amber the panel's ribbon uses.
+ *
+ * Positive/speaking is the accent by design: it is spent only on "this is
+ * on" - speaking, live, connected. Status dots are gone (status.css carries
+ * presence on avatar opacity), so this cannot repaint presence chrome.
+ * ------------------------------------------------------------------------- */
+:root,
+.theme-dark,
+.theme-midnight {
+    --status-positive: var(--exo-accent) !important;
+    --status-speaking: var(--exo-accent) !important;
+    --text-positive: var(--exo-accent) !important;
+    --status-warning: var(--exo-warn) !important;
+    --text-warning: var(--exo-warn) !important;
+    --status-danger: var(--exo-danger) !important;
+    --text-danger: var(--exo-danger) !important;
+    /* Danger buttons take the same red; hover/active derived, not new hues. */
+    --button-danger-background: var(--exo-danger) !important;
+    --button-danger-background-hover: color-mix(in oklab, var(--exo-danger) 85%, white) !important;
+    --button-danger-background-active: color-mix(in oklab, var(--exo-danger) 85%, black) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 16. Flat selection. Discord marks the selected row with a grey pill wash;
+ * with blurple gone, selection needs one unmistakable signal: a 2px white
+ * edge inside the row's own rounded corner, plus a quiet lift.
+ *
+ * The same pair is applied to Friends tabs (§6) and settings nav items (§13),
+ * so "selected" is one signal across the whole client rather than a wash here
+ * and a differently-weighted wash there.
+ * ------------------------------------------------------------------------- */
+nav[class*="privateChannels"] [class*="selected"][class*="interactive"],
+nav[class*="privateChannels"] li[class*="channel"] [class*="selected"],
+nav[aria-label$="(server)"] li[class*="selected_"] a[href^="/channels/"] {
+    background: var(--exo-selected) !important;
+    box-shadow: inset 2px 0 0 var(--exo-selected-edge) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 17. Type scale and density. One step tighter everywhere; chat stays the
+ * most readable thing on screen.
+ * ------------------------------------------------------------------------- */
+[data-list-id="chat-messages"] [class*="messageContent"] {
+    font-size: var(--exo-type-msg) !important;
+    line-height: 1.35 !important;
+}
+
+nav[class*="privateChannels"] [class*="name_"],
+nav[aria-label$="(server)"] a[href^="/channels/"] [class*="name_"],
+[class*="membersWrap"] [class*="name_"] {
+    font-size: var(--exo-type-base) !important;
+}
+
+/* Role colours frequently resolve to near-black on AMOLED and made the member
+ * list look disabled or missing. Names are navigation, not decoration: keep
+ * them consistently legible and leave role colour to the profile itself. */
+[class*="membersWrap"] [class*="member_"] :is(
+    [class*="name_"],
+    [class*="username_"]
+) {
+    color: var(--exo-text-2) !important;
+}
+
+[class*="membersWrap"] [class*="member_"]:hover :is(
+    [class*="name_"],
+    [class*="username_"]
+),
+[class*="membersWrap"] [class*="selected"] :is(
+    [class*="name_"],
+    [class*="username_"]
+) {
+    color: var(--exo-text) !important;
+}
+
+/* ===========================================================================
+ * EVERY REMAINING SURFACE. §0b in quickcss carries the palette into Discord's
+ * own components; the sections below finish the geometry and the handful of
+ * surfaces that read no token at all. Each is scoped so a rotted hash means
+ * "that surface reverts to stock", never breakage.
+ * ======================================================================== */
+
+/* ---------------------------------------------------------------------------
+ * 18. Autocomplete - the mention/emoji/command popup over the chat input.
+ * ------------------------------------------------------------------------- */
+[class*="autocomplete"] {
+    background: var(--exo-raised) !important;
+    border: 1px solid var(--exo-hairline) !important;
+    border-radius: var(--exo-radius) !important;
+    box-shadow: none !important;
+}
+
+[class*="autocomplete"] [class*="selected"],
+[class*="autocomplete"] [aria-selected="true"] {
+    background: var(--exo-hover) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 19. Expression picker - the tabbed emoji/GIF/sticker panel. One floating
+ * surface, quiet category rails, a well for its search field.
+ * ------------------------------------------------------------------------- */
+[class*="expressionPicker"],
+[class*="emojiPicker"] {
+    background: var(--exo-raised) !important;
+    border: 1px solid var(--exo-hairline) !important;
+    border-radius: var(--exo-radius) !important;
+    box-shadow: none !important;
+}
+
+[class*="expressionPicker"] :is([class*="header_"], [class*="categoryList"], [class*="navList"]),
+[class*="emojiPicker"] :is([class*="header_"], [class*="categoryList"], [class*="navList"], [class*="inspector"]) {
+    background: var(--exo-raised) !important;
+    border-color: var(--exo-hairline) !important;
+    box-shadow: none !important;
+}
+
+[class*="expressionPicker"] [class*="searchBar"],
+[class*="emojiPicker"] [class*="searchBar"] {
+    background: var(--exo-well) !important;
+    border: 1px solid var(--exo-hairline) !important;
+    border-radius: var(--exo-radius-sm) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 20. Search results popout (Ctrl+F / toolbar search).
+ * ------------------------------------------------------------------------- */
+[class*="searchResultsWrap"] {
+    background: var(--exo-bg) !important;
+    border-left: 1px solid var(--exo-hairline) !important;
+}
+
+[class*="searchResultsWrap"] [class*="searchResult"] {
+    background: var(--exo-raised) !important;
+    border: 1px solid var(--exo-hairline) !important;
+    border-radius: var(--exo-radius) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 21. Jump bars: "new messages since..." and "you're viewing older messages".
+ * Quiet raised strips instead of blurple banners.
+ * ------------------------------------------------------------------------- */
+[class*="newMessagesBar"],
+[class*="jumpToPresentBar"] {
+    background: var(--exo-raised) !important;
+    border: 1px solid var(--exo-hairline) !important;
+    border-radius: var(--exo-radius) !important;
+    color: var(--exo-text-2) !important;
+}
+
+[class*="newMessagesBar"] button,
+[class*="jumpToPresentBar"] button {
+    color: var(--exo-text) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 22. Typing strip and character counter: tertiary text, no chrome.
+ * ------------------------------------------------------------------------- */
+[class*="typing_"] {
+    color: var(--exo-text-3) !important;
+    background: transparent !important;
+}
+
+[class*="charCounter"] {
+    color: var(--exo-text-3) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 23. Message hover toolbar - the react/reply/more strip that floats on the
+ * hovered message. Raised surface, hairline, compact.
+ * ------------------------------------------------------------------------- */
+[class*="message_"] [class*="buttonContainer"] [class*="buttons_"],
+[id^="message-actions"] {
+    background: var(--exo-raised) !important;
+    border: 1px solid var(--exo-hairline) !important;
+    border-radius: var(--exo-radius) !important;
+    box-shadow: none !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 24. Embeds, attachments and code: the raised card + hairline system.
+ * The embed's coloured left spine collapses to a hairline - branded rails on
+ * every link preview are noise on AMOLED.
+ * ------------------------------------------------------------------------- */
+[class*="embedWrapper"],
+[class*="embedFull"] {
+    background: var(--exo-raised) !important;
+    border: 1px solid var(--exo-hairline) !important;
+    border-left: 1px solid var(--exo-hairline) !important;
+}
+
+[class*="attachment_"],
+[class*="mediaAttachmentsContainer"] article {
+    background: var(--exo-raised) !important;
+    border: 1px solid var(--exo-hairline) !important;
+}
+
+[data-list-id="chat-messages"] pre,
+[data-list-id="chat-messages"] code {
+    background: var(--exo-well) !important;
+    border: 1px solid var(--exo-hairline) !important;
+    border-radius: var(--exo-radius-sm) !important;
+}
+
+[data-list-id="chat-messages"] code:not([class*="hljs"]) {
+    border: none !important;
+    padding: 1px 4px !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 25. Reply / forward / upload bars docked above the chat input share the
+ * input's well and hairline so the composer reads as one assembly.
+ * ------------------------------------------------------------------------- */
+[class*="replyBar"],
+[class*="attachedBars"] > * {
+    background: var(--exo-well) !important;
+    border: 1px solid var(--exo-hairline) !important;
+    border-bottom: none !important;
+    border-radius: var(--exo-radius) var(--exo-radius) 0 0 !important;
+}
+
+[class*="channelAttachmentArea"] [class*="upload_"] {
+    background: var(--exo-raised) !important;
+    border: 1px solid var(--exo-hairline) !important;
+    border-radius: var(--exo-radius) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 26. Voice panel - the connection strip and controls that appear above the
+ * account panel while in a call. Same well, hairline top, no glow.
+ * ------------------------------------------------------------------------- */
+section[aria-label="User area"] > div:not([aria-label]),
+div[class*="panels_"] {
+    background: var(--exo-bg) !important;
+}
+
+div[class*="panels_"] > [class*="wrapper_"],
+div[class*="panels_"] [class*="rtcConnectionStatus"],
+div[class*="panels_"] [class*="voiceButtonsContainer"] {
+    background: var(--exo-bg) !important;
+    border-color: var(--exo-hairline) !important;
+    box-shadow: none !important;
+}
+
+/* Voice channel member rows in the sidebar share the row system. */
+nav[aria-label$="(server)"] [class*="voiceUser"] {
+    height: 28px !important;
+    border-radius: var(--exo-radius-sm) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 27. Settings panes: black columns, hairline seams, wells for controls.
+ * Token bridge (§0b) colours the controls themselves; this fixes the sheets.
+ * ------------------------------------------------------------------------- */
+[class*="standardSidebarView"] {
+    background: var(--exo-bg) !important;
+}
+
+[class*="standardSidebarView"] [class*="sidebarRegion"],
+[class*="standardSidebarView"] [class*="sidebarViewWrapper"] {
+    background: var(--exo-bg) !important;
+}
+
+[class*="standardSidebarView"] [class*="contentRegion"] {
+    background: var(--exo-bg) !important;
+}
+
+[class*="standardSidebarView"] [class*="side_"] [class*="item_"] {
+    border-radius: var(--exo-radius) !important;
+    min-height: 32px !important;
+}
+
+[class*="contentRegion"] [class*="divider"],
+[role="dialog"] [class*="divider_"] {
+    border-color: var(--exo-hairline) !important;
+    background-color: var(--exo-hairline) !important;
+    height: 1px !important;
+}
+
+/* Select boxes and their popout listboxes. */
+[class*="select_"],
+button[class*="select"] {
+    background: var(--exo-well) !important;
+    border: 1px solid var(--exo-hairline) !important;
+    border-radius: var(--exo-radius-sm) !important;
+}
+
+[role="listbox"]:not([class*="quickswitcher"]) {
+    background: var(--exo-raised) !important;
+    border: 1px solid var(--exo-hairline) !important;
+    border-radius: var(--exo-radius) !important;
+}
+
+[role="listbox"] [role="option"][aria-selected="true"],
+[role="listbox"] [role="option"]:hover {
+    background: var(--exo-hover) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 28. Quick switcher: one well input on a raised sheet, 40px result rows.
+ * ------------------------------------------------------------------------- */
+div[class*="quickswitcher"] input {
+    background: var(--exo-well) !important;
+    border: 1px solid var(--exo-hairline) !important;
+    border-radius: var(--exo-radius) !important;
+    color: var(--exo-text) !important;
+}
+
+div[class*="quickswitcher"] [class*="result_"] {
+    border-radius: var(--exo-radius) !important;
+    min-height: 40px !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 29. Buttons that read no token: outlined ones get the hairline system,
+ * link-style ones get secondary text. Filled/brand handled by §0b + §15.
+ * ------------------------------------------------------------------------- */
+button[class*="lookOutlined"] {
+    background: transparent !important;
+    border: 1px solid var(--exo-hairline-strong) !important;
+    color: var(--exo-text) !important;
+}
+
+button[class*="lookLink"] {
+    color: var(--exo-text-2) !important;
+}
+
+button[class*="lookLink"]:hover {
+    color: var(--exo-text) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 30. Empty states, upsell art and onboarding illustrations read as quiet
+ * copy, not marketing: tertiary text, no painted backdrops.
+ * ------------------------------------------------------------------------- */
+[class*="emptyState"],
+[class*="emptyPage"] {
+    background: transparent !important;
+    color: var(--exo-text-3) !important;
+}
+
+/* Forum and thread cards join the card system. */
+[class*="mainCard"],
+[class*="threadSidebarOpen"] [class*="container_"][class*="card"] {
+    background: var(--exo-raised) !important;
+    border: 1px solid var(--exo-hairline) !important;
+    border-radius: var(--exo-radius) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 31. The classic switch - SOLE switch paint path.
+ *
+ * Discord's modal-settings toggle paints its track with an INLINE style
+ * (rgb(88,101,242) checked), so the §0b switch tokens never reach it.
+ * !important + :has(checked) is the only override that wins. Do not add a
+ * second switch theme elsewhere.
+ * ------------------------------------------------------------------------- */
+label:has(input[type="checkbox"]:checked) [class*="switchIndicator"] {
+    background-color: var(--exo-accent) !important;
+    border-color: transparent !important;
+}
+
+label:has(input[type="checkbox"]:not(:checked)) [class*="switchIndicator"] {
+    background-color: rgba(255, 255, 255, 0.10) !important;
+    border-color: var(--exo-hairline-strong) !important;
+}
+
+/* The knob's inner glyph (check/cross path) is painted in the track colour
+ * by the same inline mechanism. */
+label:has(input[type="checkbox"]:checked) svg[class*="thumb"] path {
+    fill: var(--exo-accent) !important;
+}
+
+label:has(input[type="checkbox"]:not(:checked)) svg[class*="thumb"] path {
+    fill: var(--exo-text-3) !important;
+}

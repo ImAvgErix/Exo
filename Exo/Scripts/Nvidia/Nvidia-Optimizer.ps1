@@ -1,0 +1,4412 @@
+# Exo NVIDIA Optimizer
+# - Newest series-correct Game Ready / security driver when needed (Display.Driver ONLY)
+# - Strip NVIDIA App/GFE + Virtual/HD Audio - keep Display.Driver + classic Control Panel only
+# - NVCleanstall-class expert tweaks: MSI High, telemetry off, Ansel off, HDCP off
+# - Series + G-SYNC Base Profile via Profile Inspector (-silentImport)
+# - Accept CPL EULA; set "Use the advanced 3D image settings" (NVTweak Gestalt=2)
+# - Overlay/Windows toasts off
+# - Hardware-aware display policy (Full RGB / primary max Hz / secondary unchanged / GPU no-scaling)
+#
+#   Nvidia-Optimizer.ps1
+#   Nvidia-Optimizer.ps1 -Gsync
+#   Nvidia-Optimizer.ps1 -Repair
+#   Nvidia-Optimizer.ps1 -Series 40 -Gsync
+#   Nvidia-Optimizer.ps1 -SkipApp   # skip client wipe/CPL ensure (advanced)
+
+param(
+    [switch]$Gsync,
+    [switch]$RawLatency,
+    [ValidateSet('', '10', '20', '30', '40', '50')]
+    [string]$Series = '',
+    [switch]$Repair,
+    [switch]$NonInteractive,
+    [switch]$SkipDownload,
+    [switch]$SkipApp,          # skip App wipe + Control Panel ensure
+    [switch]$InstallApp,       # deprecated / ignored - Control Panel only
+    [switch]$SkipProfile,
+    [switch]$SkipDriver,
+    [switch]$ForceDriver,
+    # SafePolicy is the old all-or-nothing guard. It bundled genuinely risky mutations
+    # (HD-audio component removal, driver install) together with the entire point of the
+    # module - removing the NVIDIA App and GFE, stripping bloat components, killing the
+    # overlay, raising the GPU power ceiling, setting display prefs - and the shipped path
+    # forced it on. Everything in that second list was written, smoke-tested, and never ran.
+    # The risky items now have their own switches so the rest can do its job.
+    [switch]$SafePolicy,
+    [switch]$SkipAudio,
+    [switch]$Experimental
+)
+
+$ErrorActionPreference = 'Stop'
+$Script:NvidiaOptVersion = '1.16.6'
+$Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ProfilesDir = Join-Path $Root 'profiles'
+$StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Exo'
+$StatePath = Join-Path $StateDir 'nvidia-optimizer.json'
+$DrsSnapshotPath = Join-Path $StateDir 'nvidia-drs-pre-exo.bin'
+# Keep Exo managed Profile Inspector private. Never delete user-installed copies.
+$NpiDir = Join-Path $StateDir 'tools\nvidiaProfileInspector'
+$DriverCacheDir = Join-Path $StateDir 'drivers'
+$NpiExeName = 'nvidiaProfileInspector.exe'
+# Profile Inspector: ALWAYS GitHub Latest (Orbmu2k). No hard-pinned old tags.
+# Offline: reuse last managed install only if exe hash still matches stamp.
+$Script:NpiRepoApi = 'https://api.github.com/repos/Orbmu2k/nvidiaProfileInspector/releases/latest'
+$Script:NpiAssetName = 'nvidiaProfileInspector.zip'
+
+# --- PowerShell 7 host (stable pwsh 7.x; never Windows PowerShell 5.1) ---
+function Test-ExoIsPwsh7Host {
+    # Any pwsh 7.x host is accepted (Preview preferred; stable accepted).
+    # Windows PowerShell 5.1 is rejected - the optimizer uses Core-only APIs.
+    if ($PSVersionTable.PSEdition -ne 'Core') { return $false }
+    if ([int]$PSVersionTable.PSVersion.Major -lt 7) { return $false }
+    $hostPath = ''
+    try { $hostPath = [string](Get-Process -Id $PID -ErrorAction Stop).Path } catch { }
+    if ($hostPath -match 'WindowsPowerShell') { return $false }
+    return $true
+}
+function Get-ExoPwsh {
+    # PowerShell 7 Preview preferred; stable accepted. Never Windows PowerShell 5.1.
+    $candidates = [System.Collections.Generic.List[string]]::new()
+    foreach ($p in @(
+        (Join-Path $env:ProgramFiles 'PowerShell\7-preview\pwsh.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\pwsh-preview.exe')
+    )) {
+        if ($p) { [void]$candidates.Add($p) }
+    }
+    $cmdPreview = Get-Command pwsh-preview -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmdPreview -and $cmdPreview.Source) { [void]$candidates.Add([string]$cmdPreview.Source) }
+
+    $appsRoot = Join-Path $env:ProgramFiles 'WindowsApps'
+    if (Test-Path -LiteralPath $appsRoot) {
+        Get-ChildItem -LiteralPath $appsRoot -Directory -Filter 'Microsoft.PowerShellPreview*' -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            ForEach-Object { [void]$candidates.Add((Join-Path $_.FullName 'pwsh.exe')) }
+    }
+
+    $cmdPwsh = Get-Command pwsh -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmdPwsh -and $cmdPwsh.Source) { [void]$candidates.Add([string]$cmdPwsh.Source) }
+
+    $stable = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
+    if ($stable) { [void]$candidates.Add($stable) }
+    if (Test-Path -LiteralPath $appsRoot) {
+        Get-ChildItem -LiteralPath $appsRoot -Directory -Filter 'Microsoft.PowerShell_*' -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notmatch '(?i)Preview' } |
+            Sort-Object Name -Descending |
+            ForEach-Object { [void]$candidates.Add((Join-Path $_.FullName 'pwsh.exe')) }
+    }
+
+    foreach ($p in ($candidates | Select-Object -Unique)) {
+        if (-not $p -or $p -match 'WindowsPowerShell') { continue }
+        if (Test-Path -LiteralPath $p) { return $p }
+    }
+    throw 'PowerShell 7 is required for Exo NVIDIA helpers. Install Preview: winget install Microsoft.PowerShell.Preview'
+}
+function Assert-ExoPwsh7 {
+    if (Test-ExoIsPwsh7Host) { return }
+    $hint = $null
+    try { $hint = Get-ExoPwsh } catch { }
+    $msg = 'PowerShell 7 is required to run the NVIDIA Optimizer (not Windows PowerShell 5.1). Install Preview: winget install Microsoft.PowerShell.Preview, then re-run from Exo.'
+    if ($hint) { $msg += " Found PowerShell 7 at: $hint" }
+    throw $msg
+}
+Assert-ExoPwsh7
+
+function Test-ExoIsAdmin {
+    try {
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+        return ([Security.Principal.WindowsPrincipal]$identity).IsInRole(
+            [Security.Principal.WindowsBuiltInRole]::Administrator)
+    } catch { return $false }
+}
+
+# --- Stage tracking: every throw is attributed to the stage that was running so
+# --- the state json / detect / UI can say exactly where Apply failed.
+$Script:CurrentStage = 'init'
+$Script:CompletedPartialDisplayPolicy = $false
+function Set-ExoStage([string]$Name) {
+    $Script:CurrentStage = $Name
+}
+
+function Save-ExoFailureState([string]$Stage, [string]$Message) {
+    # Persist the failing stage + reason into nvidia-optimizer.json. Always keep
+    # applyInProgress=true (fail-closed) so a late post-verify throw after a
+    # premature Save-State cannot look like a successful Apply. Never throws.
+    try {
+        $existing = $null
+        if (Test-Path -LiteralPath $StatePath) {
+            try { $existing = Get-Content -LiteralPath $StatePath -Raw | ConvertFrom-Json -AsHashtable } catch { $existing = $null }
+        }
+        if ($null -eq $existing -or $existing -isnot [hashtable]) { $existing = @{} }
+        $existing['lastErrorStage'] = $Stage
+        $existing['lastError'] = [string]$Message
+        $existing['lastErrorUtc'] = (Get-Date).ToUniversalTime().ToString('o')
+        $existing['applyStatus'] = 'failed'
+        $existing['applyInProgress'] = $true
+        if (-not $existing.ContainsKey('version')) { $existing['version'] = $Script:NvidiaOptVersion }
+        Save-State $existing
+    } catch { }
+}
+
+function Write-HubProgress([int]$Percent, [string]$Status) {
+    $p = [Math]::Max(0, [Math]::Min(100, $Percent))
+    # Progress must never move backwards: the orb reads the last value it saw, so a
+    # single low number mid-run reads as the bar jumping back and the module stalling.
+    # An explicit 0 still resets, matching PowerShellRunnerService.ParseLine.
+    if ($p -ne 0 -and (Test-Path Variable:\Global:ExoProgressHigh)) { $p = [Math]::Max($p, [int]$Global:ExoProgressHigh) }
+    $Global:ExoProgressHigh = $p
+    $line = "EXO_PROGRESS:$p|$Status"
+    # IMPORTANT: do NOT Write-Output progress - it poisons function returns
+    # (e.g. Download path becomes Object[] and -PackageExe fails type conversion).
+    # Elevated Exo polls EXO_LOG; host line still shows in console.
+    Write-Host $line
+    if ($env:EXO_LOG) {
+        try { Add-Content -LiteralPath $env:EXO_LOG -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue } catch { }
+    }
+}
+
+function Get-NvoRegValue([string]$Path, [string]$Name, $Default = $null) {
+    # Reads a registry value without dereferencing a property off a possibly-absent
+    # object. Nvidia.Bootstrap turns StrictMode on for the session, so the older shape
+    #   (Get-ItemProperty -LiteralPath $p -ErrorAction SilentlyContinue).Name
+    # THROWS whenever the value is missing rather than yielding $null. Wrapped in a
+    # bare catch that reads as harmless, it silently skips whatever follows it in the
+    # try - which is how the Steam FSO counter and the NVIDIA MSI check both ended up
+    # dead. Use this for every optional registry read.
+    if (-not $Path) { return $Default }
+    try {
+        $item = Get-ItemProperty -LiteralPath $Path -ErrorAction SilentlyContinue
+        if (-not $item) { return $Default }
+        if ($item.PSObject.Properties.Name -notcontains $Name) { return $Default }
+        return $item.$Name
+    } catch { return $Default }
+}
+
+function Coerce-StringPath($Value) {
+    if ($null -eq $Value) { return $null }
+    if ($Value -is [string] -and -not [string]::IsNullOrWhiteSpace($Value)) { return [string]$Value }
+    foreach ($v in @($Value)) {
+        if ($v -is [string] -and $v -match '\.exe(\s|$)|\.dll(\s|$)' ) { return [string]$v.Trim() }
+        if ($v -is [string] -and (Test-Path -LiteralPath $v -ErrorAction SilentlyContinue)) { return [string]$v }
+    }
+    foreach ($v in @($Value)) {
+        if ($v -is [string] -and -not [string]::IsNullOrWhiteSpace($v) -and $v -notmatch '^EXO_PROGRESS') {
+            return [string]$v
+        }
+    }
+    return $null
+}
+
+function Coerce-Hashtable($Value) {
+    if ($null -eq $Value) { return $null }
+    if ($Value -is [hashtable]) { return $Value }
+    if ($Value -is [System.Collections.IDictionary]) { return $Value }
+    $hit = @($Value) | Where-Object { $_ -is [hashtable] -or $_ -is [System.Collections.IDictionary] } | Select-Object -Last 1
+    return $hit
+}
+
+function Get-ExoHashBool($Map, [string]$Key, [bool]$Default = $false) {
+    # StrictMode-safe: missing hashtable keys throw under PS7 StrictMode.
+    if ($null -eq $Map) { return $Default }
+    try {
+        if ($Map -is [hashtable] -or $Map -is [System.Collections.IDictionary]) {
+            if (-not $Map.ContainsKey($Key)) { return $Default }
+            return [bool]$Map[$Key]
+        }
+        $names = @($Map.PSObject.Properties.Name)
+        if ($names -notcontains $Key) { return $Default }
+        return [bool]$Map.$Key
+    } catch {
+        return $Default
+    }
+}
+
+function Get-ExoHashString($Map, [string]$Key, [string]$Default = '') {
+    if ($null -eq $Map) { return $Default }
+    try {
+        if ($Map -is [hashtable] -or $Map -is [System.Collections.IDictionary]) {
+            if (-not $Map.ContainsKey($Key)) { return $Default }
+            $v = $Map[$Key]
+            if ($null -eq $v) { return $Default }
+            return [string]$v
+        }
+        $names = @($Map.PSObject.Properties.Name)
+        if ($names -notcontains $Key) { return $Default }
+        $v = $Map.$Key
+        if ($null -eq $v) { return $Default }
+        return [string]$v
+    } catch {
+        return $Default
+    }
+}
+
+function Normalize-DriverUpdateInfo($Info) {
+    # Every Start-DriverUpdateIfNeeded path must expose the same keys so StrictMode
+    # never blows up mid-pipeline (RebootRequired was the 3.0.6 user brick).
+    $h = Coerce-Hashtable $Info
+    if (-not $h) {
+        $h = @{
+            Ran              = $false
+            NeedsUpdate      = $false
+            NeedsRetweak     = $false
+            TweaksOk         = $true
+            Method           = 'none'
+            RebootRequired   = $false
+            ContinuePipeline = $true
+        }
+        return $h
+    }
+    if (-not $h.ContainsKey('Ran')) { $h['Ran'] = $false }
+    if (-not $h.ContainsKey('NeedsUpdate')) { $h['NeedsUpdate'] = $false }
+    if (-not $h.ContainsKey('NeedsRetweak')) { $h['NeedsRetweak'] = $false }
+    if (-not $h.ContainsKey('TweaksOk')) { $h['TweaksOk'] = $true }
+    if (-not $h.ContainsKey('Method')) { $h['Method'] = 'none' }
+    if (-not $h.ContainsKey('RebootRequired')) { $h['RebootRequired'] = $false }
+    if (-not $h.ContainsKey('ContinuePipeline')) {
+        $h['ContinuePipeline'] = -not [bool]$h['RebootRequired']
+    }
+    return $h
+}
+function Write-NLog([string]$Prefix, [string]$Msg) {
+    $line = "$Prefix $Msg"
+    Write-Host $line
+    if ($env:EXO_LOG) {
+        try { Add-Content -LiteralPath $env:EXO_LOG -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue } catch { }
+    }
+}
+function Write-Step([string]$Msg) { Write-NLog '[*]' $Msg }
+function Write-Ok([string]$Msg)   { Write-NLog '[+]' $Msg }
+function Write-Warn([string]$Msg) { Write-NLog '[!]' $Msg }
+function Write-Err([string]$Msg)  { Write-NLog '[-]' $Msg }
+
+function Get-NvLiveService([string]$Name) {
+    # Get-Service is not proof a service still exists. This run's own NVIDIA App wipe
+    # uninstalls FrameViewSdk, which owns FvSvc; the SCM then keeps a marked-for-delete
+    # entry until the next reboot, after the registry key and the binary are already gone.
+    # That ghost has no readable config, so "$svc.StartType -ne 'Disabled'" was TRUE and
+    # every caller counted a service that no longer exists as still enabled. Measured:
+    # Set-Service failed at the debloat stage with "The system cannot find the file
+    # specified", and two stages later post-verify failed the entire Apply with
+    # "Service active: FvSvc" -- a run that had actually done all of its work.
+    # The registry key is the authority: no key, no service.
+    $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if (-not $svc) { return $null }
+    if (-not (Test-Path -LiteralPath ("HKLM:\SYSTEM\CurrentControlSet\Services\" + $Name))) { return $null }
+    return $svc
+}
+
+function Get-NvidiaGpus {
+    # Use plain array - @($genericList) throws "Argument types do not match" on PS7.
+    $items = @()
+    try {
+        Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | ForEach-Object {
+            $n = [string]$_.Name
+            if ($n -match '(?i)nvidia|geforce|rtx|gtx|quadro|titan') {
+                $items += [pscustomobject]@{ Name = $n; Driver = [string]$_.DriverVersion }
+            }
+        }
+    } catch { }
+    return $items
+}
+
+function Get-GpuSeriesFromName([string]$Name) {
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $null }
+    if ($Name -match '(?i)\b(?:RTX|GTX)\s*([1-5])0\d{2}\b') { return $Matches[1] + '0' }
+    if ($Name -match '(?i)\b([1-5])0\d{2}\s*(?:Ti|SUPER)?\b') { return $Matches[1] + '0' }
+    # GTX 16 is Turing without RT/DLSS/rBAR. The 10-series pack avoids
+    # unsupported RTX-only profile flags while keeping the same FPS tweaks.
+    if ($Name -match '(?i)\b16\d{2}\b') { return '10' }
+    return $null
+}
+
+function Get-DriverBranchSeriesFromName([string]$Name) {
+    # Driver package branch is NOT the same as profile pack series.
+    # GTX 16xx still receives modern Game Ready drivers; GTX 10xx is legacy (~582.x).
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $null }
+    if ($Name -match '(?i)\b16\d{2}\b') { return '20' }
+    if ($Name -match '(?i)\b(?:RTX|GTX)\s*([1-5])0\d{2}\b') { return $Matches[1] + '0' }
+    if ($Name -match '(?i)\b([1-5])0\d{2}\s*(?:Ti|SUPER)?\b') { return $Matches[1] + '0' }
+    return $null
+}
+
+function Get-ProfileFile([string]$SeriesId, [bool]$UseGsync) {
+    $name = if ($UseGsync) { "$SeriesId Series G-SYNC.nip" } else { "$SeriesId Series.nip" }
+    $path = Join-Path $ProfilesDir $name
+    if (Test-Path -LiteralPath $path) { return $path }
+    return $null
+}
+
+function Get-ExoGameProfileCatalog {
+    # Application profiles clone the active series Base pack (all 10 packs work:
+    # we generate from whichever XX Series / G-SYNC NIP was selected at apply).
+    # Tier:
+    #   comp   - pure competitive: sticky latency stack + disable Frame Gen override when present
+    #   hybrid - still sticky latency (no driver FPS cap / prf=1) but leave FG as the series pack
+    # Minecraft (javaw.exe) is intentionally NOT in this catalog: javaw.exe is shared by
+    # every desktop Java app, and the clone mechanism applies the full Base pack + tier
+    # deltas per exe - too broad for a shared host process (would force max-perf pins on
+    # IDEs and installers). Excluded with reason instead of shipping an unsafe profile.
+    # Competitive / hybrid game catalog. Every title clones the series Base pack +
+    # latency deltas so the driver never leaves stock "Adaptive" on a game exe.
+    @(
+        @{ Name = 'Valorant';            Tier = 'comp';   Exes = @('VALORANT-Win64-Shipping.exe', 'VALORANT.exe') },
+        @{ Name = 'Counter-Strike 2';    Tier = 'comp';   Exes = @('cs2.exe') },
+        @{ Name = 'Marvel Rivals';       Tier = 'comp';   Exes = @('Marvel-Win64-Shipping.exe', 'MarvelRivals-Win64-Shipping.exe', 'marvel-rivals.exe', 'MarvelRivals_Launcher.exe') },
+        @{ Name = 'Rainbow Six Siege';   Tier = 'comp';   Exes = @('RainbowSix.exe', 'RainbowSix_Vulkan.exe', 'RainbowSixGame.exe', 'RainbowSix_BE.exe') },
+        @{ Name = 'Fortnite';            Tier = 'comp';   Exes = @('FortniteClient-Win64-Shipping.exe', 'FortniteClient-Win64-Shipping_EAC_EOS.exe') },
+        @{ Name = 'Apex Legends';        Tier = 'comp';   Exes = @('r5apex.exe', 'r5apex_dx12.exe') },
+        @{ Name = 'League of Legends';   Tier = 'comp';   Exes = @('League of Legends.exe', 'LeagueClient.exe') },
+        @{ Name = 'Overwatch 2';         Tier = 'comp';   Exes = @('Overwatch.exe') },
+        @{ Name = 'Rocket League';       Tier = 'comp';   Exes = @('RocketLeague.exe') },
+        @{ Name = 'Call of Duty';        Tier = 'comp';   Exes = @('cod.exe', 'cod24.exe', 'cod23.exe', 'cod22.exe', 'cod22-cod.exe', 'cod23-cod.exe', 'cod25-cod.exe', 'BlackOps6.exe', 'BlackOpsColdWar.exe', 'ModernWarfare.exe') },
+        @{ Name = 'Black Ops 7';         Tier = 'comp';   Exes = @('cod.exe', 'BlackOps7.exe', 'bo7.exe') },
+        @{ Name = 'Destiny 2';           Tier = 'hybrid'; Exes = @('destiny2.exe') },
+        @{ Name = 'PUBG';                Tier = 'comp';   Exes = @('TslGame.exe') },
+        @{ Name = 'Escape from Tarkov';  Tier = 'comp';   Exes = @('EscapeFromTarkov.exe', 'EscapeFromTarkov_BE.exe') },
+        @{ Name = 'The Finals';          Tier = 'comp';   Exes = @('Discovery.exe') },
+        @{ Name = 'Delta Force';         Tier = 'comp';   Exes = @('DeltaForceClient-Win64-Shipping.exe') },
+        @{ Name = 'Deadlock';            Tier = 'comp';   Exes = @('deadlock.exe', 'project8.exe') },
+        @{ Name = 'XDefiant';            Tier = 'comp';   Exes = @('XDefiant.exe') },
+        @{ Name = 'FragPunk';            Tier = 'comp';   Exes = @('FragPunk.exe', 'FragPunkClient-Win64-Shipping.exe') },
+        @{ Name = 'Warframe';            Tier = 'hybrid'; Exes = @('Warframe.x64.exe', 'Warframe.exe') },
+        @{ Name = 'Path of Exile 2';     Tier = 'hybrid'; Exes = @('PathOfExileSteam.exe', 'PathOfExile_x64Steam.exe', 'PathOfExile.exe', 'PathOfExile_x64.exe') },
+        @{ Name = 'Dota 2';              Tier = 'comp';   Exes = @('dota2.exe') },
+        @{ Name = 'Team Fortress 2';     Tier = 'comp';   Exes = @('tf_win64.exe', 'hl2.exe') },
+        @{ Name = 'Rust';                Tier = 'comp';   Exes = @('RustClient.exe') },
+        @{ Name = 'GTA V';               Tier = 'hybrid'; Exes = @('GTA5.exe', 'GTA5_Enhanced.exe') },
+        @{ Name = 'FiveM';               Tier = 'comp';   Exes = @('FiveM.exe', 'FiveM_GTAProcess.exe', 'FiveM_b3095_GTAProcess.exe') },
+        @{ Name = 'Helldivers 2';        Tier = 'hybrid'; Exes = @('helldivers2.exe') },
+        @{ Name = 'Black Myth Wukong';   Tier = 'hybrid'; Exes = @('b1-Win64-Shipping.exe') },
+        @{ Name = 'Elden Ring';          Tier = 'hybrid'; Exes = @('eldenring.exe', 'start_protected_game.exe') },
+        @{ Name = 'Wuthering Waves';     Tier = 'hybrid'; Exes = @('Client-Win64-Shipping.exe', 'Wuthering Waves.exe') },
+        @{ Name = 'Halo Infinite';       Tier = 'comp';   Exes = @('HaloInfinite.exe') },
+        @{ Name = 'Forza Horizon 5';     Tier = 'hybrid'; Exes = @('ForzaHorizon5.exe') },
+        @{ Name = 'Cyberpunk 2077';     Tier = 'hybrid'; Exes = @('Cyberpunk2077.exe') },
+        @{ Name = 'RDR2';                Tier = 'hybrid'; Exes = @('RDR2.exe') },
+        @{ Name = 'Palworld';            Tier = 'hybrid'; Exes = @('Palworld-Win64-Shipping.exe') },
+        @{ Name = 'Once Human';          Tier = 'hybrid'; Exes = @('ONCE_HUMAN.exe', 'OnceHuman.exe') },
+        @{ Name = 'Hunt Showdown';       Tier = 'comp';   Exes = @('HuntGame.exe') },
+        @{ Name = 'Siege X';             Tier = 'comp';   Exes = @('RainbowSix.exe', 'RainbowSix_Vulkan.exe') },
+        @{ Name = 'Battlefield';         Tier = 'comp';   Exes = @('bfv.exe', 'bf1.exe', 'bf2042.exe', 'BF2042.exe') },
+        @{ Name = 'Warzone';             Tier = 'comp';   Exes = @('cod.exe', 'ModernWarfare.exe') },
+        @{ Name = 'Roblox';              Tier = 'comp';   Exes = @('RobloxPlayerBeta.exe') },
+        @{ Name = 'osu!';                Tier = 'comp';   Exes = @('osu!.exe', 'osulazer.exe') },
+        @{ Name = 'Minecraft Bedrock';   Tier = 'hybrid'; Exes = @('Minecraft.Windows.exe') },
+        @{ Name = 'Arc Raiders';         Tier = 'comp';   Exes = @('PioneerGame.exe', 'ArcRaiders.exe') },
+        @{ Name = 'Splitgate 2';         Tier = 'comp';   Exes = @('Splitgate2-Win64-Shipping.exe') },
+        @{ Name = 'Marvel Rivals DX12';  Tier = 'comp';   Exes = @('Marvel-Win64-Shipping.exe') }
+    )
+}
+
+function Get-ExoNipSettingMap {
+    param([System.Xml.XmlNode]$ProfileNode)
+    $map = @{}
+    foreach ($s in @($ProfileNode.SelectNodes('Settings/ProfileSetting'))) {
+        $id = [string]$s.SettingID
+        if ($id) { $map[$id] = [string]$s.SettingValue }
+    }
+    return $map
+}
+
+function Set-ExoNipSettingValue {
+    param(
+        [Parameter(Mandatory)][System.Xml.XmlNode]$ProfileNode,
+        [Parameter(Mandatory)][string]$SettingId,
+        [Parameter(Mandatory)][string]$Value
+    )
+    $node = $ProfileNode.SelectSingleNode("Settings/ProfileSetting[SettingID='$SettingId']")
+    if (-not $node) { return $false }
+    $valNode = $node.SelectSingleNode('SettingValue')
+    if (-not $valNode) { return $false }
+    if ([string]$valNode.InnerText -eq $Value) { return $false }
+    $valNode.InnerText = $Value
+    return $true
+}
+
+function Remove-ExoRiskyGlobalOverrides {
+    param([Parameter(Mandatory)][System.Xml.XmlNode]$ProfileNode)
+    # These are hidden/undocumented Inspector controls whose best value is game,
+    # engine, driver and firmware specific. Forcing them globally is not a valid
+    # max-performance policy: rBAR is driver-allowlisted, games own RT/DLSS, and
+    # present/memory/CUDA internals can regress or break unrelated applications.
+    # Leave them at the current Game Ready driver profile value instead.
+    $ids = @(
+        '983226','983227','983295',                     # forced rBAR
+        '6505105','283385329','283385331','283385335', # forced DLSS presets
+        '283385345','283385346','283385347',           # DLL overrides / Frame Gen
+        '14566042','549198379',                        # force RT off
+        '11434076','269573260','283962569','286335539',
+        '550867192','550932728','1343646814','1350011281'
+    )
+    $removed = 0
+    foreach ($id in $ids) {
+        foreach ($node in @($ProfileNode.SelectNodes("Settings/ProfileSetting[SettingID='$id']"))) {
+            [void]$node.ParentNode.RemoveChild($node)
+            $removed++
+        }
+    }
+    return $removed
+}
+
+function Apply-ExoGameProfileDeltas {
+    param(
+        [Parameter(Mandatory)][System.Xml.XmlNode]$ProfileNode,
+        [Parameter(Mandatory)][hashtable]$BaseMap,
+        [Parameter(Mandatory)][string]$Tier
+    )
+    # Detect pack policy from the cloned Base (works for all 10 series packs).
+    $isGsyncPack = ($BaseMap['294973784'] -eq '1')
+    $changed = 0
+    $notes = [System.Collections.Generic.List[string]]::new()
+
+    # --- Sticky latency / clarity stack (every title) ---
+    # Re-assert so an app-level NVIDIA/App profile cannot leave softer defaults.
+    # Profile pack: pre-render 1, max perf, highest Hz, no post-process latency traps.
+    $common = @{
+        '8102046'   = '1'          # Maximum Pre-Rendered Frames = 1
+        '546199011' = '1'          # Maximum frames allowed = 1
+        '277041154' = '0'          # Frame Rate Limiter V3 off
+        '553505273' = '0'          # Triple buffering off
+        '274197361' = '1'          # Prefer maximum performance
+        '549528094' = '1'          # Threaded optimization on
+        '6600001'   = '1'          # Highest available refresh
+        '276089202' = '0'          # FXAA off
+        '10011052'  = '0'          # MFAA off
+        '6714153'   = '0'          # Ambient occlusion off
+        '276158834' = '0'          # Ansel off
+        '271965065' = '0'          # Predefined Ansel off
+        '275315612' = '0'          # FXAA indicator off
+        '543959236' = '0'          # Enable overlay off
+        '282245910' = '0'          # Antialiasing - Mode = App controlled (no forced AA latency)
+        '283226065' = '1'          # Texture filtering - Quality = High performance (when present)
+        '283385347' = '0'          # DLSS Frame Generation override off by default (re-enabled only hybrid tier)
+    }
+    foreach ($id in $common.Keys) {
+        if (-not $BaseMap.ContainsKey($id)) { continue }
+        if (Set-ExoNipSettingValue -ProfileNode $ProfileNode -SettingId $id -Value $common[$id]) {
+            $changed++
+        }
+    }
+
+    # Re-pin pack-specific sync / latency policy (do not invent G-SYNC on max-FPS packs).
+    if ($isGsyncPack) {
+        $gsyncPins = @{
+            '390467'    = '2'   # ULL CPL = Ultra (Reflex overrides this in supported games)
+            '277041152' = '1'   # ULL enabled for non-Reflex DX9/DX11 titles
+            '294973784' = '1'   # GSYNC global mode on
+            '278196727' = '1'   # GSYNC application state on
+            '279476687' = '1'   # GSYNC application mode on
+            '11041279'  = '0'   # OS VRR override off (driver/G-SYNC path)
+        }
+        if ($BaseMap.ContainsKey('11041231') -and $BaseMap['11041231']) {
+            $gsyncPins['11041231'] = $BaseMap['11041231'] # keep pack VSync (G-SYNC friendly)
+        }
+        foreach ($id in $gsyncPins.Keys) {
+            if (-not $BaseMap.ContainsKey($id)) { continue }
+            if (Set-ExoNipSettingValue -ProfileNode $ProfileNode -SettingId $id -Value $gsyncPins[$id]) {
+                $changed++
+            }
+        }
+        [void]$notes.Add('gsync-pins')
+    } else {
+        $fpsPins = @{
+            '390467'    = '2'          # ULL CPL = Ultra
+            '277041152' = '1'          # ULL enabled
+            '294973784' = '0'          # GSYNC global off
+            '278196727' = '0'          # GSYNC app state off
+            '11041279'  = '0'          # OS VRR override off (toggle off means every VRR path off)
+            '11041231'  = '138504007'  # VSync force off (Exo max-FPS packs)
+        }
+        foreach ($id in $fpsPins.Keys) {
+            if (-not $BaseMap.ContainsKey($id)) { continue }
+            if (Set-ExoNipSettingValue -ProfileNode $ProfileNode -SettingId $id -Value $fpsPins[$id]) {
+                $changed++
+            }
+        }
+        [void]$notes.Add('maxfps-pins')
+    }
+
+    # Competitive titles: keep FG off (already in common). Hybrid can restore pack default if present.
+    if ($Tier -eq 'comp') {
+        [void]$notes.Add('fg-off')
+        [void]$notes.Add('comp')
+    } else {
+        # Hybrid / single-player: allow series-pack FG default if the base defined one
+        if ($BaseMap.ContainsKey('283385347') -and $BaseMap['283385347'] -ne '0') {
+            if (Set-ExoNipSettingValue -ProfileNode $ProfileNode -SettingId '283385347' -Value $BaseMap['283385347']) {
+                $changed++
+            }
+            [void]$notes.Add('fg-pack')
+        }
+        [void]$notes.Add('hybrid')
+    }
+
+    return @{
+        Changed = $changed
+        Notes   = @($notes)
+        Gsync   = [bool]$isGsyncPack
+    }
+}
+
+function New-ExoCombinedProfileNip {
+    param(
+        [Parameter(Mandatory)][string]$BaseNipPath,
+        [Parameter(Mandatory)][string]$OutPath
+    )
+    if (-not (Test-Path -LiteralPath $BaseNipPath)) {
+        throw "Base NIP missing: $BaseNipPath"
+    }
+
+    # Profiles ship as UTF-16 XML.
+    [xml]$doc = [IO.File]::ReadAllText($BaseNipPath)
+    $array = $doc.ArrayOfProfile
+    if (-not $array) { throw 'Base NIP missing ArrayOfProfile root' }
+    $base = @($array.Profile) | Select-Object -First 1
+    if (-not $base -or [string]$base.ProfileName -ne 'Base Profile') {
+        throw 'Base NIP must start with a Base Profile entry'
+    }
+
+    $prunedOverrides = Remove-ExoRiskyGlobalOverrides -ProfileNode $base
+    $baseMap = Get-ExoNipSettingMap -ProfileNode $base
+    $games = @(Get-ExoGameProfileCatalog)
+    $deltaSummary = @()
+    foreach ($game in $games) {
+        $clone = $base.CloneNode($true)
+        $nameNode = $clone.SelectSingleNode('ProfileName')
+        if (-not $nameNode) { throw 'Cloned profile missing ProfileName' }
+        $nameNode.InnerText = "Exo - $($game.Name)"
+
+        $execNode = $clone.SelectSingleNode('Executeables')
+        if (-not $execNode) {
+            $execNode = $doc.CreateElement('Executeables')
+            [void]$clone.InsertAfter($execNode, $nameNode)
+        } else {
+            $execNode.RemoveAll()
+        }
+        foreach ($exe in @($game.Exes)) {
+            $s = $doc.CreateElement('string')
+            $s.InnerText = [string]$exe
+            [void]$execNode.AppendChild($s)
+        }
+
+        $tier = if ($game.Tier) { [string]$game.Tier } else { 'comp' }
+        $delta = Apply-ExoGameProfileDeltas -ProfileNode $clone -BaseMap $baseMap -Tier $tier
+        $deltaSummary += [string]("$($game.Name)[$tier/$($delta.Notes -join '+')]")
+
+        [void]$array.AppendChild($clone)
+    }
+
+    # Prefer maximum performance is useful for game executables, but forcing it
+    # on the global Base Profile keeps the GPU in a high-power state for desktop
+    # and background apps. The clones above retain the pin; Base returns to the
+    # driver default for lower idle power and less background heat.
+    $globalPowerNodes = @($base.SelectNodes("Settings/ProfileSetting[SettingID='274197361']"))
+    foreach ($node in $globalPowerNodes) {
+        [void]$node.ParentNode.RemoveChild($node)
+    }
+
+    $settings = New-Object System.Xml.XmlWriterSettings
+    # UTF-16 LE + BOM (matches shipped .nip packs). Constructor is (bigEndian, byteOrderMark).
+    $settings.Encoding = New-Object System.Text.UnicodeEncoding $false, $true
+    $settings.Indent = $true
+    $settings.OmitXmlDeclaration = $false
+    $writer = [System.Xml.XmlWriter]::Create($OutPath, $settings)
+    try {
+        $doc.Save($writer)
+    } finally {
+        $writer.Dispose()
+    }
+
+    if (-not (Test-Path -LiteralPath $OutPath) -or (Get-Item -LiteralPath $OutPath).Length -lt 1000) {
+        throw "Combined NIP write failed: $OutPath"
+    }
+
+    return @{
+        Path          = $OutPath
+        GameCount     = $games.Count
+        Games         = @($games | ForEach-Object { [string]$_.Name })
+        DeltaSummary  = $deltaSummary
+        GameDeltas    = $true
+        PrunedOverrides = $prunedOverrides
+    }
+}
+
+function Test-IsNotebookGpuName([string]$Name) {
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $false }
+    return [bool]($Name -match '(?i)\b(?:Laptop GPU|Notebook|Mobile|Max-Q)\b|\bMX\d+\b|\b\d{3,4}M\b')
+}
+
+function Get-NvidiaHardwarePolicy {
+    param(
+        [Parameter(Mandatory)]$Gpu,
+        [Parameter(Mandatory)][string]$SeriesId,
+        [Parameter(Mandatory)][bool]$IsNotebook,
+        [Parameter(Mandatory)][bool]$ForceGsync,
+        [Parameter(Mandatory)][bool]$ForceRawLatency
+    )
+
+    if ($ForceGsync -and $ForceRawLatency) {
+        throw 'Choose either G-SYNC / VRR or raw latency, not both.'
+    }
+
+    $result = [ordered]@{
+        gpuName             = [string]$Gpu.Name
+        series              = $SeriesId
+        notebook            = $IsNotebook
+        displayCount        = 0
+        primaryMode         = 'unknown'
+        primaryConnection   = 'unknown'
+        primaryCurrentHz    = 0
+        primaryMaxHz        = 0
+        adaptiveSyncSignal  = $false
+        adaptiveSyncEvidence = 'none'
+        gsync               = [bool]$ForceGsync
+        selectionSource     = $(if ($ForceGsync) { 'explicit-gsync' } elseif ($ForceRawLatency) { 'explicit-raw-latency' } else { 'safe-default-raw-latency' })
+        displayPolicy       = 'primary-max-hz; secondary-keep; full-rgb; gpu-no-scaling'
+    }
+
+    $helper = Join-Path $Root 'tools\Exo.NvDisplay.exe'
+    if (-not (Test-Path -LiteralPath $helper)) { return $result }
+    try {
+        $lines = @(& $helper --list-displays 2>$null)
+        $jsonLine = @($lines | Where-Object { "$_" -like 'EXO_NVDISPLAY_JSON:*' }) | Select-Object -Last 1
+        if (-not $jsonLine) { return $result }
+        $inventory = ([string]$jsonLine).Substring('EXO_NVDISPLAY_JSON:'.Length) | ConvertFrom-Json
+        $displays = @($inventory.displays)
+        $result.displayCount = $displays.Count
+        $primaryDisplay = @($displays | Where-Object { [bool]$_.isPrimary }) | Select-Object -First 1
+        if (-not $primaryDisplay) { $primaryDisplay = $displays | Select-Object -First 1 }
+        if ($primaryDisplay) {
+            $result.primaryMode = [string]$primaryDisplay.currentMode
+            $result.primaryConnection = [string]$primaryDisplay.connection
+            $result.primaryCurrentHz = [int]$primaryDisplay.currentHz
+            $result.primaryMaxHz = [int]$primaryDisplay.maxHz
+            $result.adaptiveSyncSignal = [bool]$primaryDisplay.adaptiveSyncCandidate
+            $result.adaptiveSyncEvidence = [string]$primaryDisplay.adaptiveSyncEvidence
+        }
+
+    } catch {
+        Write-Warn "Display hardware inventory unavailable: $($_.Exception.Message)"
+    }
+    return $result
+}
+
+function Assert-ExoNipProfile {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][bool]$UseGsync
+    )
+    try { [xml]$document = Get-Content -LiteralPath $Path -Raw -ErrorAction Stop }
+    catch { throw "Profile XML is invalid: $($_.Exception.Message)" }
+
+    $profiles = @($document.ArrayOfProfile.Profile)
+    if ($profiles.Count -ne 1 -or [string]$profiles[0].ProfileName -ne 'Base Profile') {
+        throw 'Profile must contain exactly one Base Profile entry'
+    }
+    $settings = @($profiles[0].Settings.ProfileSetting)
+    if ($settings.Count -lt 60) { throw "Profile is incomplete ($($settings.Count) settings)" }
+    $duplicates = @($settings | Group-Object SettingID | Where-Object { $_.Count -gt 1 })
+    if ($duplicates.Count -gt 0) { throw "Profile has duplicate setting IDs: $($duplicates.Name -join ', ')" }
+
+    $actual = @{}
+    foreach ($setting in $settings) { $actual[[string]$setting.SettingID] = [string]$setting.SettingValue }
+    $expected = @{
+        '274197361' = '1'          # Prefer maximum performance
+        '6600001'   = '1'          # Highest available refresh
+        '549528094' = '1'          # Threaded optimization on
+        '11306135'  = '4294967295' # Unlimited shader cache
+        '277041154' = '0'          # Frame limiter disabled
+        '553505273' = '0'          # Triple buffering off
+        '390467'    = '2'
+        '277041152' = '1'
+        '294973784' = $(if ($UseGsync) { '1' } else { '0' })
+        '11041279'  = '0'
+        '11041231'  = $(if ($UseGsync) { '1199655232' } else { '138504007' })
+    }
+    foreach ($id in $expected.Keys) {
+        if (-not $actual.ContainsKey($id) -or $actual[$id] -ne $expected[$id]) {
+            throw "Profile performance invariant failed for setting $id (expected $($expected[$id]), got $($actual[$id]))"
+        }
+    }
+    Write-Ok "Profile verified: $($settings.Count) settings, performance invariants intact"
+}
+
+function Stop-NpiProcesses {
+    Get-Process -Name 'nvidiaProfileInspector' -ErrorAction SilentlyContinue | ForEach-Object {
+        try {
+            $processPath = [string]$_.Path
+            if ($processPath -and $processPath.StartsWith($NpiDir, [StringComparison]::OrdinalIgnoreCase)) {
+                Write-Ok "Stopping Exo managed Profile Inspector PID $($_.Id)"
+                Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+            } else {
+                Write-Warn "Profile Inspector PID $($_.Id) is not managed by Exo and was left running"
+            }
+        } catch { }
+    }
+    Start-Sleep -Milliseconds 500
+}
+
+function Read-ManagedNpiStamp([string]$StampPath) {
+    $metadata = @{}
+    if (-not (Test-Path -LiteralPath $StampPath)) { return $metadata }
+    try {
+        Get-Content -LiteralPath $StampPath -ErrorAction Stop | ForEach-Object {
+            $parts = $_ -split '=', 2
+            if ($parts.Count -eq 2) { $metadata[$parts[0].Trim()] = $parts[1].Trim() }
+        }
+    } catch { }
+    return $metadata
+}
+
+function Test-ManagedNpiCache {
+    param(
+        [Parameter(Mandatory)][string]$ExePath,
+        [Parameter(Mandatory)][string]$StampPath,
+        [string]$ExpectedTag = ''
+    )
+    if (-not (Test-Path -LiteralPath $ExePath) -or -not (Test-Path -LiteralPath $StampPath)) {
+        return $false
+    }
+    try {
+        $metadata = Read-ManagedNpiStamp $StampPath
+        if ($ExpectedTag -and [string]$metadata.tag -ne $ExpectedTag) { return $false }
+        if (-not $metadata.exeSha256) { return $false }
+        $actualHash = (Get-FileHash -LiteralPath $ExePath -Algorithm SHA256 -ErrorAction Stop).Hash
+        return $actualHash -eq [string]$metadata.exeSha256
+    } catch {
+        return $false
+    }
+}
+
+function Resolve-LatestNpiRelease {
+    # Always GitHub Latest (non-draft). Returns @{ Tag; ZipUrl; ZipSha256 } or $null.
+    $headers = @{
+        'User-Agent' = 'Exo-Nvidia/1.12'
+        'Accept'     = 'application/vnd.github+json'
+    }
+    try {
+        $rel = Invoke-RestMethod -Uri $Script:NpiRepoApi -Headers $headers -TimeoutSec 30
+        # A 200 with an unexpected shape (rate-limit interstitial, captive-proxy
+        # JSON) must not throw under StrictMode - degrade like a network failure.
+        if (-not $rel -or -not ($rel.PSObject.Properties.Name -contains 'tag_name') -or -not $rel.tag_name) { return $null }
+        $asset = @($rel.assets) | Where-Object {
+            [string]$_.name -eq $Script:NpiAssetName -or
+            [string]$_.browser_download_url -match '(?i)nvidiaProfileInspector\.zip'
+        } | Select-Object -First 1
+        if (-not $asset -or -not $asset.browser_download_url) {
+            Write-Warn 'Profile Inspector latest release has no zip asset'
+            return $null
+        }
+        $sha = $null
+        $digest = [string]$asset.digest
+        if ($digest -match '^sha256:([0-9a-fA-F]{64})$') { $sha = $Matches[1].ToUpperInvariant() }
+    } catch {
+        # GitHub's unauthenticated API quota is 60 req/hr per source IP - the most
+        # likely real-world failure on a shared/corporate NAT, not "GitHub is down".
+        # Give that case a specific, actionable message instead of a generic one.
+        $status = $null
+        try { $status = [int]$_.Exception.Response.StatusCode } catch { }
+        if ($status -eq 403 -or $status -eq 429 -or
+            $_.Exception.Message -match '(?i)rate limit') {
+            Write-Warn 'GitHub API rate limit reached while checking for the latest Profile Inspector release. This resets hourly; a cached copy (if any) will be used in the meantime.'
+        } else {
+            Write-Warn "Profile Inspector latest lookup failed: $($_.Exception.Message)"
+        }
+        return $null
+    }
+    return @{
+        Tag       = [string]$rel.tag_name
+        ZipUrl    = [string]$asset.browser_download_url
+        ZipSha256 = $sha
+        Name      = [string]$asset.name
+    }
+}
+
+function Install-NpiFresh {
+    # ALWAYS install/refresh to Orbmu2k GitHub Latest. Cache only when stamp tag ==
+    # latest tag and exe hash still matches. Offline: keep last good managed install.
+    Set-ExoStage 'npi-install'
+    Write-Step 'Checking Exo managed NVIDIA Profile Inspector (GitHub Latest)...'
+    $target = Join-Path $NpiDir $NpiExeName
+    $stampPath = Join-Path $NpiDir 'EXO-NPI-VERSION.txt'
+    $dlHeaders = @{ 'User-Agent' = 'Exo-Nvidia/1.12'; 'Accept' = 'application/octet-stream' }
+
+    $latest = Resolve-LatestNpiRelease
+    if ($latest) {
+        Write-Ok "Latest Profile Inspector on GitHub: $($latest.Tag)"
+        if (Test-ManagedNpiCache -ExePath $target -StampPath $stampPath -ExpectedTag $latest.Tag) {
+            Write-Ok "Managed Profile Inspector already current ($($latest.Tag))"
+            return $target
+        }
+    } else {
+        # Offline / API down: reuse verified cache of any tag if present.
+        if (Test-ManagedNpiCache -ExePath $target -StampPath $stampPath -ExpectedTag '') {
+            $stamp = Read-ManagedNpiStamp $stampPath
+            Write-Warn "Could not reach GitHub Latest - using cached Profile Inspector ($($stamp.tag))"
+            return $target
+        }
+        throw 'Profile Inspector Latest lookup failed and no verified managed copy is available'
+    }
+
+    $tag = [string]$latest.Tag
+    $downloadUri = [uri]$latest.ZipUrl
+    if ($downloadUri.Scheme -ne 'https' -or $downloadUri.Host -notmatch '(?i)(^|\.)github\.com$') {
+        throw "Unexpected Profile Inspector download host: $($downloadUri.Host)"
+    }
+
+    $workId = [guid]::NewGuid().ToString('n')
+    $zip = Join-Path $env:TEMP ("exo-npi-$workId.zip")
+    $extract = Join-Path $env:TEMP ("exo-npi-$workId")
+    Write-Ok "Downloading Profile Inspector $tag..."
+    try {
+        try {
+            Invoke-WebRequest -Uri $downloadUri.AbsoluteUri -OutFile $zip -UseBasicParsing -Headers $dlHeaders -TimeoutSec 120
+        } catch {
+            if (Test-ManagedNpiCache -ExePath $target -StampPath $stampPath -ExpectedTag '') {
+                $stamp = Read-ManagedNpiStamp $stampPath
+                Write-Warn "Download failed - keeping cached Profile Inspector ($($stamp.tag)): $($_.Exception.Message)"
+                return $target
+            }
+            throw "Profile Inspector download failed and no verified cached copy is available: $($_.Exception.Message)"
+        }
+        $actualDigest = (Get-FileHash -LiteralPath $zip -Algorithm SHA256 -ErrorAction Stop).Hash.ToUpperInvariant()
+        if ($latest.ZipSha256) {
+            if ($actualDigest -ine $latest.ZipSha256) {
+                throw "Profile Inspector archive SHA256 did not match GitHub asset digest (expected $($latest.ZipSha256), got $actualDigest)"
+            }
+            Write-Ok 'Verified Profile Inspector archive against GitHub asset SHA256'
+        } else {
+            Write-Ok "Profile Inspector archive SHA256: $actualDigest (no GitHub digest published)"
+        }
+        New-Item -ItemType Directory -Force -Path $extract | Out-Null
+        Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
+        $found = Get-ChildItem -LiteralPath $extract -Recurse -Filter $NpiExeName -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $found) { throw 'nvidiaProfileInspector.exe missing from downloaded archive' }
+
+        Stop-NpiProcesses
+        if (Test-Path -LiteralPath $NpiDir) {
+            try {
+                Remove-Item -LiteralPath $NpiDir -Recurse -Force -ErrorAction Stop
+            } catch {
+                # Locked exe: replace files in place.
+                Write-Warn "Could not wipe NPI folder cleanly: $($_.Exception.Message)"
+            }
+        }
+        if (-not (Test-Path -LiteralPath $NpiDir)) {
+            New-Item -ItemType Directory -Force -Path $NpiDir | Out-Null
+        }
+        Copy-Item -LiteralPath $found.FullName -Destination $target -Force
+        foreach ($extra in @('Reference.xml', 'CustomSettingNames.xml', 'nvidiaProfileInspector.exe.config')) {
+            $hit = Get-ChildItem -LiteralPath $extract -Recurse -Filter $extra -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($hit) { Copy-Item -LiteralPath $hit.FullName -Destination (Join-Path $NpiDir $extra) -Force }
+        }
+
+        $exeSha256 = (Get-FileHash -LiteralPath $target -Algorithm SHA256 -ErrorAction Stop).Hash
+        $stamp = @"
+tag=$tag
+installedUtc=$((Get-Date).ToUniversalTime().ToString('o'))
+source=$($downloadUri.AbsoluteUri)
+zipSha256=$actualDigest
+exeSha256=$exeSha256
+managedBy=Exo
+policy=github-latest
+"@
+        [IO.File]::WriteAllText($stampPath, $stamp.Trim() + "`n", [Text.UTF8Encoding]::new($false))
+        if (-not (Test-Path -LiteralPath $target)) { throw "Managed NPI missing at $target" }
+        Write-Ok "Managed NPI ready: $target ($tag - GitHub Latest)"
+    } finally {
+        Remove-Item -LiteralPath $extract -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
+    }
+    return $target
+}
+
+function Import-ExoNipProfile {
+    param(
+        [Parameter(Mandatory)][string]$NipPath,
+        [int]$TimeoutSec = 120
+    )
+    # Use Exo isolated managed copy; user-installed Profile Inspector is never touched.
+    if (-not (Test-Path -LiteralPath $NipPath)) {
+        throw "NIP profile missing: $NipPath"
+    }
+
+    # Native NVAPI first (Phase B). Exo.NvDisplay parses the same .nip and writes each setting
+    # through the driver's own API, then reads every one back - so a partial apply is reported
+    # as partial instead of hiding behind a zero exit code from a third-party executable.
+    #
+    # Profile Inspector stays as the fallback rather than being deleted. It is a working path,
+    # and the native one has not yet run on the full spread of driver branches and GPUs that
+    # this pack supports. It gets removed once the native path has proven itself in the wild,
+    # not on the day it was written.
+    $nvExe = Get-ExoNvDisplayPath
+    if ($nvExe) {
+        try {
+            $drsOut = & $nvExe --drs-apply "$NipPath" 2>&1
+            $drsExit = $LASTEXITCODE
+            # Route by what the line says, not by where it came from. Every [DRS] line used to
+            # go out through Write-Ok, so "write failed" and "not verified" were stamped with
+            # the [+] OK prefix -- the log read as six successes that say "failed", and the
+            # host's error extractor, which reasonably treats [+] as "not the problem", had to
+            # sift them out of the message it showed the user.
+            foreach ($line in @($drsOut)) {
+                if ("$line" -notmatch '^\[DRS\]') { continue }
+                if ("$line" -match '(?i)write failed|not verified') { Write-Warn "$line" }
+                else { Write-Ok "$line" }
+            }
+            $summary = @($drsOut) | Where-Object { "$_" -like '*summary written=*' } | Select-Object -Last 1
+
+            # Parse app-profile counts from native helper (multi-profile NIP path).
+            $appExpected = 0; $appVerified = 0; $appWritten = 0
+            $appLine = @($drsOut) | Where-Object { "$_" -match 'app-profiles written=' } | Select-Object -Last 1
+            if ("$appLine" -match 'written=(\d+)\s+verified=(\d+)\s+expected=(\d+)') {
+                $appWritten = [int]$Matches[1]
+                $appVerified = [int]$Matches[2]
+                $appExpected = [int]$Matches[3]
+            }
+
+            # Exit 0 with app profiles expected but none verified is a soft-green lie -
+            # fall through to Profile Inspector so per-title pins still land.
+            if ($drsExit -eq 0 -and $appExpected -gt 0 -and $appVerified -lt $appExpected) {
+                Write-Warn ("Native NVAPI Base ok but app-profiles verified={0}/{1}; falling back to Profile Inspector" -f $appVerified, $appExpected)
+            }
+            elseif ($drsExit -eq 0) {
+                Write-Ok "Applied profile natively via NVAPI: $(Split-Path $NipPath -Leaf)"
+                if ($appExpected -gt 0) {
+                    Write-Ok ("Native app-profiles verified={0}/{1}" -f $appVerified, $appExpected)
+                }
+                return [pscustomobject]@{
+                    Success          = $true
+                    ExitCode         = 0
+                    NpiPath          = 'native-nvapi'
+                    Method           = 'nvapi'
+                    Detail           = [string]$summary
+                    AppProfilesExpected = $appExpected
+                    AppProfilesVerified = $appVerified
+                    AppProfilesWritten  = $appWritten
+                }
+            }
+
+            # Exit 3 means some settings landed and some did not. That is a real partial, and
+            # falling through to Profile Inspector to retry the whole pack is the right move -
+            # but it gets logged, because a pack that partially applies every time is a pack
+            # that needs fixing, not a condition to keep papering over.
+            Write-Warn "Native DRS apply returned $drsExit ($summary); falling back to Profile Inspector"
+        } catch {
+            Write-Warn "Native DRS apply threw: $($_.Exception.Message); falling back to Profile Inspector"
+        }
+    } else {
+        Write-Warn 'Exo.NvDisplay not found; using Profile Inspector'
+    }
+
+    Stop-NpiProcesses
+    $npi = Install-NpiFresh
+    if (-not (Test-Path -LiteralPath $npi)) {
+        throw 'Fresh Profile Inspector install failed'
+    }
+
+    $safeNip = Join-Path $env:TEMP ("exo-profile-$([guid]::NewGuid().ToString('n')).nip")
+    Copy-Item -LiteralPath $NipPath -Destination $safeNip -Force
+    Write-Ok "Importing profile with FRESH NPI: $(Split-Path $NipPath -Leaf)"
+    Write-Ok "NPI: $npi"
+    Write-Ok "NIP: $safeNip"
+
+    $exitCode = -1
+    $npiWorkDir = Split-Path -Parent $npi
+    $proc = $null
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $npi
+        # Official CLI: -silentImport "path.nip" (or -silent). Never pass bare .nip
+        # first - that opens the WPF UI and can flash XAML/doc windows.
+        $quotedNip = '"' + $safeNip.Replace('"', '') + '"'
+        $psi.Arguments = "-silentImport $quotedNip"
+        $psi.WorkingDirectory = $npiWorkDir
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        $psi.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $proc = [Diagnostics.Process]::Start($psi)
+        if (-not $proc) { throw 'Failed to start Profile Inspector' }
+
+        if (-not $proc.WaitForExit($TimeoutSec * 1000)) {
+            try { $proc.Kill() } catch { }
+            Stop-NpiProcesses
+            throw "Profile Inspector silent import timed out after ${TimeoutSec}s. Profile NOT marked applied."
+        }
+        $exitCode = [int]$proc.ExitCode
+        Write-Ok "NPI silent import exit code: $exitCode"
+        # Kill any leftover WPF windows even after a "successful" exit.
+        Stop-NpiProcesses
+    } finally {
+        Stop-NpiProcesses
+        if ($proc) { try { $proc.Dispose() } catch { } }
+        try { Remove-Item -LiteralPath $safeNip -Force -ErrorAction SilentlyContinue } catch { }
+        # Never leave .nip next to NPI or in TEMP for Explorer/Edge to open as a document.
+        try {
+            Get-ChildItem -LiteralPath $npiWorkDir -Filter '*.nip' -File -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -like 'exo-*' -or $_.LastWriteTime -gt (Get-Date).AddMinutes(-5) } |
+                Remove-Item -Force -ErrorAction SilentlyContinue
+        } catch { }
+    }
+
+    if ($exitCode -ne 0) {
+        throw "Profile Inspector silent import failed (exit $exitCode). Profile NOT marked applied."
+    }
+
+    Write-Ok '3D Base Profile imported with Exo managed NPI'
+
+    # Independently verify per-game profiles via native NVAPI status (same pack).
+    # NPI exit 0 alone used to leave gameProfilesApplied=false forever → Partial.
+    $appExpected = 0; $appVerified = 0; $appWritten = 0
+    if ($nvExe) {
+        try {
+            $stOut = & $nvExe --drs-status "$NipPath" 2>&1
+            $appLine = @($stOut) | Where-Object { "$_" -match 'app-profiles written=' } | Select-Object -Last 1
+            if ("$appLine" -match 'written=(\d+)\s+verified=(\d+)\s+expected=(\d+)') {
+                $appWritten = [int]$Matches[1]
+                $appVerified = [int]$Matches[2]
+                $appExpected = [int]$Matches[3]
+            }
+            foreach ($line in @($stOut)) {
+                if ("$line" -match '^\[DRS\]') { Write-Ok "$line" }
+            }
+            Write-Ok ("NPI post-import verify: app-profiles verified={0}/{1}" -f $appVerified, $appExpected)
+        } catch {
+            Write-Warn "NPI post-import DRS status failed: $($_.Exception.Message)"
+        }
+    }
+
+    return @{
+        Success   = $true
+        ExitCode  = $exitCode
+        # Keep the fallback result shape identical to the native NVAPI result.
+        # StrictMode turns a missing Method property into a hard Apply failure
+        # after the import has already succeeded.
+        Method    = 'npi'
+        AppProfilesExpected = $appExpected
+        AppProfilesVerified = $appVerified
+        AppProfilesWritten   = $appWritten
+        NpiPath   = $npi
+        NipFile   = (Split-Path $NipPath -Leaf)
+        ManagedNpi = $true
+        NpiFolder = $NpiDir
+    }
+}
+
+function Get-ExoNipBaseProfileMap {
+    # SettingID -> SettingValue map of the Base Profile inside a .nip pack.
+    param([Parameter(Mandatory)][string]$NipPath)
+    if (-not (Test-Path -LiteralPath $NipPath)) { return $null }
+    try { [xml]$doc = [IO.File]::ReadAllText($NipPath) } catch { return $null }
+    $base = @($doc.ArrayOfProfile.Profile) |
+        Where-Object { [string]$_.ProfileName -eq 'Base Profile' } |
+        Select-Object -First 1
+    if (-not $base) { return $null }
+    $map = Get-ExoNipSettingMap -ProfileNode $base
+    # New-ExoCombinedProfileNip deliberately removes the global power pin after
+    # cloning it into game profiles. Verify the policy that is actually imported.
+    [void]$map.Remove('274197361')
+    return $map
+}
+
+function Invoke-ExoNpiExportCustomized {
+    param(
+        [Parameter(Mandatory)][string]$NpiPath,
+        [int]$TimeoutSec = 60
+    )
+    # NPI CLI: -exportCustomized writes every customized profile into a
+    # timestamped .nip next to the exe, then exits. Older builds produce nothing;
+    # the caller records drsVerified='unavailable' (non-fatal) in that case.
+    if (-not (Test-Path -LiteralPath $NpiPath)) { return $null }
+    $npiWorkDir = Split-Path -Parent $NpiPath
+    $startUtc = (Get-Date).ToUniversalTime()
+    $proc = $null
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $NpiPath
+        $psi.Arguments = '-exportCustomized'
+        $psi.WorkingDirectory = $npiWorkDir
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        $psi.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
+        $proc = [Diagnostics.Process]::Start($psi)
+        if (-not $proc) { return $null }
+        if (-not $proc.WaitForExit($TimeoutSec * 1000)) {
+            try { $proc.Kill() } catch { }
+            return $null
+        }
+    } catch {
+        return $null
+    } finally {
+        if ($proc) { try { $proc.Dispose() } catch { } }
+    }
+
+    $exported = @(Get-ChildItem -LiteralPath $npiWorkDir -Filter '*.nip' -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.LastWriteTimeUtc -ge $startUtc.AddSeconds(-5) } |
+        Sort-Object LastWriteTimeUtc -Descending) | Select-Object -First 1
+    if (-not $exported) { return $null }
+    return [string]$exported.FullName
+}
+
+function Get-ExoDrsExportBaseMap {
+    # Base Profile SettingID -> SettingValue map from an -exportCustomized dump.
+    # Returns $null when the export cannot be parsed; an EMPTY map when the export
+    # parsed but contains no customized Base Profile (stock driver = drift).
+    param([Parameter(Mandatory)][string]$ExportPath)
+    try { [xml]$doc = [IO.File]::ReadAllText($ExportPath) } catch { return $null }
+    $base = @($doc.ArrayOfProfile.Profile) |
+        Where-Object { [string]$_.ProfileName -eq 'Base Profile' } |
+        Select-Object -First 1
+    if (-not $base) { return @{} }
+    return (Get-ExoNipSettingMap -ProfileNode $base)
+}
+
+function Get-ExoDrsVerificationResult {
+    # Pure classifier - keep aligned with NvidiaDetectCore.ps1 + NvidiaDetectLogic.cs.
+    # Compares the intersection of pack settings vs the live driver export.
+    # RequiredIds must be present in the export (they are always customized by the
+    # pack, so a correct import exports them); a missing required pin is drift.
+    param(
+        [AllowNull()][hashtable]$Expected,
+        [AllowNull()][hashtable]$Exported,
+        [string[]]$RequiredIds = @()
+    )
+    if ($null -eq $Expected -or $Expected.Count -eq 0) {
+        return [pscustomobject]@{ Status = 'unavailable'; ComparedCount = 0; Mismatches = @() }
+    }
+    if ($null -eq $Exported) {
+        return [pscustomobject]@{ Status = 'unavailable'; ComparedCount = 0; Mismatches = @() }
+    }
+    $mismatches = New-Object System.Collections.Generic.List[string]
+    $compared = 0
+    foreach ($id in @($Expected.Keys | Sort-Object)) {
+        if (-not $Exported.ContainsKey($id)) { continue }
+        $compared++
+        if ([string]$Exported[$id] -ne [string]$Expected[$id]) {
+            [void]$mismatches.Add(("{0}: expected {1}, driver has {2}" -f $id, $Expected[$id], $Exported[$id]))
+        }
+    }
+    foreach ($id in @($RequiredIds)) {
+        if (-not $Expected.ContainsKey($id)) { continue }
+        if (-not $Exported.ContainsKey($id)) {
+            [void]$mismatches.Add(("{0}: expected {1}, missing from driver export" -f $id, $Expected[$id]))
+        }
+    }
+    if ($compared -eq 0 -and $mismatches.Count -eq 0) {
+        return [pscustomobject]@{
+            Status        = 'drifted'
+            ComparedCount = 0
+            Mismatches    = @('no imported pack settings present in the driver export')
+        }
+    }
+    $status = if ($mismatches.Count -eq 0) { 'verified' } else { 'drifted' }
+    return [pscustomobject]@{
+        Status        = $status
+        ComparedCount = $compared
+        Mismatches    = @($mismatches)
+    }
+}
+
+# Pins that every Exo pack customizes and a correct import must therefore export:
+# ULL (CPL state + enabled), frame limiter off, G-SYNC/VRR, and VSync policy.
+# Power management is intentionally per-game rather than global.
+$Script:DrsRequiredPinIds = @('390467', '277041152', '277041154', '294973784', '11041279', '11041231')
+
+function Test-ExoDrsImportVerified {
+    # Post-import verification: export live DRS with the managed NPI and compare the
+    # Base Profile pins against the imported pack .nip (expected values derived from
+    # the pack itself, never hardcoded).
+    param(
+        [Parameter(Mandatory)][string]$NpiPath,
+        [Parameter(Mandatory)][string]$PackNipPath
+    )
+    $nowUtc = (Get-Date).ToUniversalTime().ToString('o')
+    $expected = Get-ExoNipBaseProfileMap -NipPath $PackNipPath
+    if ($null -eq $expected -or $expected.Count -eq 0) {
+        return @{
+            Verified     = 'unavailable'
+            VerifiedAt   = $nowUtc
+            SettingCount = 0
+            Mismatches   = @()
+            Reason       = 'imported pack could not be parsed for expected pins'
+        }
+    }
+
+    # Native NVAPI path already write-time verified Base + app profiles in a fresh session
+    # inside Exo.NvDisplay (GpuDrs). NpiPath = 'native-nvapi' is not a file, so NPI
+    # -exportCustomized cannot run — that is not a failure, and must not force Partial.
+    if ($NpiPath -eq 'native-nvapi' -or -not (Test-Path -LiteralPath $NpiPath)) {
+        return @{
+            Verified      = $true
+            VerifiedAt    = $nowUtc
+            SettingCount  = [int]$expected.Count
+            ExpectedCount = [int]$expected.Count
+            Mismatches    = @()
+            Reason        = 'native NVAPI write-time verification'
+        }
+    }
+
+    $exportPath = Invoke-ExoNpiExportCustomized -NpiPath $NpiPath
+    if (-not $exportPath) {
+        return @{
+            Verified     = 'unavailable'
+            VerifiedAt   = $nowUtc
+            SettingCount = 0
+            Mismatches   = @()
+            Reason       = '-exportCustomized produced no export (Profile Inspector too old or export failed)'
+        }
+    }
+
+    $exportedMap = $null
+    try {
+        $exportedMap = Get-ExoDrsExportBaseMap -ExportPath $exportPath
+    } finally {
+        try { Remove-Item -LiteralPath $exportPath -Force -ErrorAction SilentlyContinue } catch { }
+    }
+
+    $result = Get-ExoDrsVerificationResult -Expected $expected -Exported $exportedMap -RequiredIds $Script:DrsRequiredPinIds
+    $verified = switch ([string]$result.Status) {
+        'verified' { $true }
+        'drifted'  { $false }
+        default    { 'unavailable' }
+    }
+    $reason = if ($verified -eq 'unavailable') { 'driver export could not be parsed' } else { $null }
+    # ExpectedCount is what the pack asked for; SettingCount is what the driver export
+    # actually contained and could therefore be compared. The gap is pins this driver
+    # does not implement, and the classifier is right to skip them rather than call them
+    # drift - but the log printed only SettingCount, so "61 Base Profile pins match the
+    # imported pack" read as a clean sweep of a pack that asked for 78.
+    return @{
+        Verified      = $verified
+        VerifiedAt    = $nowUtc
+        SettingCount  = [int]$result.ComparedCount
+        ExpectedCount = [int]$expected.Count
+        Mismatches    = @($result.Mismatches)
+        Reason        = $reason
+    }
+}
+
+function Test-NvidiaAppInstalled {
+    $paths = @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App\CEF\NVIDIA App.exe'),
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App\NVIDIA App.exe'),
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA Overlay\NVIDIA App.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\NVIDIA App\CEF\NVIDIA App.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\NVIDIA App\NVIDIA App.exe')
+    )
+    foreach ($p in $paths) { if (Test-Path -LiteralPath $p) { return $true } }
+    # Broader scan: Store / winget / OEM layouts sometimes land under NVIDIA Corporation\NVIDIA App\*
+    foreach ($root in @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\NVIDIA App')
+    )) {
+        if (-not (Test-Path -LiteralPath $root)) { continue }
+        $hit = Get-ChildItem -LiteralPath $root -Recurse -Filter 'NVIDIA App.exe' -File -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($hit) { return $true }
+    }
+    $app = Get-AppxPackage -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -match '(?i)NVIDIAApp|NVIDIA\.App|GeForceExperience'
+    }
+    if ($app) { return $true }
+    # NVI2 still has Display.NvApp (or children) registered even if CEF was deleted
+    try {
+        $nvi = @(Get-Nvi2InstalledPackageNames | Where-Object { $_ -match '(?i)^Display\.NvApp$|^Display\.NvApp\.' })
+        if ($nvi.Count -gt 0) { return $true }
+    } catch { }
+    return $false
+}
+
+function Get-ExoWingetPath {
+    # Elevated Exo often cannot resolve the per-user WindowsApps winget stub.
+    $candidates = [System.Collections.Generic.List[string]]::new()
+    $cmd = Get-Command winget -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmd -and $cmd.Source) { [void]$candidates.Add([string]$cmd.Source) }
+    foreach ($p in @(
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\winget.exe'),
+        (Join-Path $env:ProgramFiles 'WindowsApps\Microsoft.DesktopAppInstaller_*_x64__8wekyb3d8bbwe\winget.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Microsoft\WindowsApps\winget.exe'),
+        (Join-Path $env:SystemRoot 'System32\winget.exe')
+    )) {
+        if ($p -match '\*') {
+            Get-Item -Path $p -ErrorAction SilentlyContinue | ForEach-Object { [void]$candidates.Add($_.FullName) }
+        } elseif ($p) {
+            [void]$candidates.Add($p)
+        }
+    }
+    $apps = Join-Path $env:ProgramFiles 'WindowsApps'
+    if (Test-Path -LiteralPath $apps) {
+        Get-ChildItem -LiteralPath $apps -Directory -Filter 'Microsoft.DesktopAppInstaller_*' -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            ForEach-Object {
+                $w = Join-Path $_.FullName 'winget.exe'
+                if (Test-Path -LiteralPath $w) { [void]$candidates.Add($w) }
+            }
+    }
+    foreach ($p in ($candidates | Select-Object -Unique)) {
+        if ($p -and (Test-Path -LiteralPath $p)) { return $p }
+    }
+    return $null
+}
+
+function Remove-NvidiaAppDesktopShortcuts {
+    # Exo never wants NVIDIA App / GFE desktop clutter after a fresh install.
+    $desktops = @(
+        [Environment]::GetFolderPath('Desktop'),
+        [Environment]::GetFolderPath('CommonDesktopDirectory')
+    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -Unique
+    $patterns = @(
+        '*NVIDIA App*.lnk',
+        '*NVIDIA GeForce Experience*.lnk',
+        '*GeForce Experience*.lnk',
+        '*NVIDIA Overlay*.lnk'
+    )
+    $removed = 0
+    foreach ($desk in $desktops) {
+        foreach ($pat in $patterns) {
+            Get-ChildItem -LiteralPath $desk -Filter $pat -File -ErrorAction SilentlyContinue | ForEach-Object {
+                try {
+                    Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop
+                    $removed++
+                    Write-Ok "Removed desktop shortcut: $($_.Name)"
+                } catch {
+                    Write-Warn "Could not remove desktop shortcut $($_.Name): $($_.Exception.Message)"
+                }
+            }
+        }
+    }
+    if ($removed -eq 0) {
+        Write-Ok 'No NVIDIA App desktop shortcuts to remove'
+    }
+    return $removed
+}
+
+
+
+
+
+
+function Test-NvidiaControlPanelInstalled {
+    $appx = Get-AppxPackage -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -match '(?i)NVIDIAControlPanel|NVIDIACorp\.NVIDIAControlPanel'
+    }
+    if ($appx) { return $true }
+    foreach ($p in @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Control Panel Client\nvcplui.exe'),
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA Control Panel\nvcplui.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Control Panel Client\nvcplui.exe')
+    )) {
+        if (Test-Path -LiteralPath $p) { return $true }
+    }
+    return $false
+}
+
+function Accept-NvidiaControlPanelEula {
+    # Classic Control Panel first-run license (separate from NVIDIA App).
+    foreach ($p in @(
+        'HKCU:\Software\NVIDIA Corporation\NVControlPanel2\Client',
+        'HKLM:\SOFTWARE\NVIDIA Corporation\NvControlPanel2\Client',
+        'HKLM:\SOFTWARE\NVIDIA Corporation\NVControlPanel2\Client'
+    )) {
+        Set-ExoRegDword -Path $p -Name 'EulaAccepted' -Value 1
+        Set-ExoRegDword -Path $p -Name 'UserAgreedToEula' -Value 1
+        Set-ExoRegDword -Path $p -Name 'AgreeToEula' -Value 1
+        Set-ExoRegDword -Path $p -Name 'ShowEula' -Value 0
+        Set-ExoRegDword -Path $p -Name 'ShowSedoanEula' -Value 0
+    }
+}
+
+
+
+
+
+# The winget Control Panel installer was removed on purpose (no call sites remain).
+# Exo deletes the NVIDIA App/GFE stack and must not pull a panel back in (issue #101).
+# Display is applied through NVAPI; the Control Panel is optional user UI only.
+
+
+function Stop-NvidiaClientProcesses {
+    # Kill App/GFE/Overlay UI and helpers. Do NOT stop NVDisplay.ContainerLocalSystem
+    # (display driver). Temporarily stop NvContainerLocalSystem so files unlock.
+    foreach ($svc in @('NvTelemetryContainer', 'NvContainerLocalSystem')) {
+        try {
+            $s = Get-Service -Name $svc -ErrorAction SilentlyContinue
+            if ($s -and $s.Status -ne 'Stopped') {
+                Write-Ok "Stopping service $svc (App unlock)..."
+                Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
+            }
+        } catch { }
+    }
+    foreach ($n in @(
+        'NVIDIA App', 'NVIDIA Overlay', 'NVIDIA Share', 'nvsphelper64', 'nvsphelper',
+        'NVIDIA Web Helper', 'GFExperience', 'NVIDIA Control Panel',
+        'NvBackend', 'oawrapper', 'nvidia-installer', 'DarkModeCheck',
+        'NVIDIA App Permission', 'NvOAWrapperCache', 'OAWrapper', 'nvcontainer'
+    )) {
+        Get-Process -Name $n -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    }
+    foreach ($im in @(
+        'NVIDIA App.exe', 'NVIDIA Overlay.exe', 'NVIDIA Share.exe', 'NVIDIA Web Helper.exe',
+        'nvsphelper64.exe', 'GFExperience.exe', 'NvBackend.exe', 'DarkModeCheck.exe',
+        'NVIDIA App Permission.exe', 'NvOAWrapperCache.exe', 'OAWrapper.exe',
+        'nvcontainer.exe', 'NVDisplay.Container.exe'
+    )) {
+        # Never kill the display driver container image if listed wrong - NVDisplay is separate
+        if ($im -eq 'NVDisplay.Container.exe') { continue }
+        try { & taskkill.exe /F /IM $im /T 2>$null | Out-Null } catch { }
+    }
+    # User-session nvcontainer only (display LS container service stays)
+    try {
+        Get-CimInstance Win32_Process -Filter "Name = 'nvcontainer.exe'" -ErrorAction SilentlyContinue | ForEach-Object {
+            try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch { }
+        }
+    } catch { }
+}
+
+function Get-Nvi2DllPath {
+    foreach ($p in @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Installer2\InstallerCore\NVI2.DLL'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Installer2\InstallerCore\NVI2.DLL')
+    )) {
+        if (Test-Path -LiteralPath $p) { return $p }
+    }
+    return $null
+}
+
+function Get-Nvi2InstalledPackageNames {
+    $names = [System.Collections.Generic.List[string]]::new()
+    foreach ($root in @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Installer2'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Installer2')
+    )) {
+        if (-not (Test-Path -LiteralPath $root)) { continue }
+        Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+            $n = $_.Name
+            if ($n -match '^(?<pkg>.+)\.\{[0-9A-Fa-f\-]{36}\}$') {
+                [void]$names.Add($Matches['pkg'])
+            }
+        }
+    }
+    # ARP child names: {GUID}_Display.NvApp.MessageBus
+    foreach ($rp in @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+    )) {
+        if (-not (Test-Path -LiteralPath $rp)) { continue }
+        Get-ChildItem -LiteralPath $rp -ErrorAction SilentlyContinue | ForEach-Object {
+            if ($_.PSChildName -match '^[\{]?[0-9A-Fa-f\-]{36}[\}]?_(?<pkg>.+)$') {
+                [void]$names.Add($Matches['pkg'])
+            }
+        }
+    }
+    return @($names | Select-Object -Unique | Sort-Object)
+}
+
+function Test-Nvi2ProtectedPackageName([string]$Name) {
+    # Only keep what Exo wants: Display.Driver (+ NVI2 installer plumbing + containers).
+    # Control Panel is a Store package, not NVI2. Everything else is fair game to strip.
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $true }
+    return ($Name -match '^(?i)Display\.Driver$|InstallerCore|^installer$|Display\.NVWMI|NvContainer(\.|$)')
+}
+
+function Test-Nvi2AppPackageName([string]$Name) {
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $false }
+    if (Test-Nvi2ProtectedPackageName $Name) { return $false }
+    return ($Name -match '(?i)^Display\.NvApp|^NvApp|ShadowPlay|FrameView|NvTelemetry|NvPlugin|NvDLISR|GFExperience|GeForceExperience|Display\.GFExperience')
+}
+
+function Test-Nvi2AudioPackageName([string]$Name) {
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $false }
+    return ($Name -match '(?i)VirtualAudio|HDAudio|Display\.Audio|^Audio\.|HD\.Audio')
+}
+
+function Test-Nvi2BloatPackageName([string]$Name) {
+    # Install-time strip beyond HD/Virtual Audio: ShadowPlay, NvBackend, NodeJS,
+    # and telemetry sub-packages exposed by the NVI2 setup package set.
+    # Display.Driver, PhysX, and NVI2 installer plumbing/containers are never touched.
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $false }
+    if (Test-Nvi2ProtectedPackageName $Name) { return $false }
+    if ($Name -match '(?i)PhysX') { return $false }
+    return ($Name -match '(?i)ShadowPlay|NvBackend|NodeJS|Node\.js|Telemetry')
+}
+
+function Invoke-Nvi2UninstallPackage {
+    param(
+        [Parameter(Mandatory)][string]$PackageName,
+        [int]$TimeoutSec = 90
+    )
+    $nvi2 = Get-Nvi2DllPath
+    if (-not $nvi2) {
+        Write-Warn "NVI2.DLL missing - cannot uninstall package $PackageName via installer"
+        return $false
+    }
+    # CRITICAL: use 64-bit System32 RunDll32 first. SysWOW64 returns 0x80070057
+    # (E_INVALIDARG) for NVI2 UninstallPackage and never removes the App.
+    $rundllCandidates = @(
+        (Join-Path $env:SystemRoot 'System32\RunDll32.EXE'),
+        (Join-Path $env:SystemRoot 'SysWOW64\RunDll32.EXE')
+    ) | Where-Object { Test-Path -LiteralPath $_ }
+
+    # Flags that skip NVI2UI confirmation / reboot prompts
+    $flagSets = @(
+        '-silent -noreboot',
+        '-silent',
+        '-silent -noreboot -passive'
+    )
+
+    foreach ($rundll in $rundllCandidates) {
+        foreach ($flags in $flagSets) {
+            try {
+                Write-Ok "NVI2 silent uninstall: $PackageName ($([IO.Path]::GetFileName($rundll)) $flags)"
+                # Exact contract: rundll32 "NVI2.DLL",UninstallPackage PackageName -silent -noreboot
+                $arg = "`"$nvi2`",UninstallPackage $PackageName $flags"
+                $psi = New-Object System.Diagnostics.ProcessStartInfo
+                $psi.FileName = $rundll
+                $psi.Arguments = $arg
+                $psi.UseShellExecute = $false
+                $psi.CreateNoWindow = $true
+                $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+                # Do not redirect stdin/stdout - can break NVI2 on some builds
+                $proc = [Diagnostics.Process]::Start($psi)
+                if (-not $proc) { continue }
+                $ok = $proc.WaitForExit([Math]::Max(5, $TimeoutSec) * 1000)
+                if (-not $ok) {
+                    try { $proc.Kill($true) } catch { try { $proc.Kill() } catch { } }
+                    Write-Warn "NVI2 $PackageName timed out after ${TimeoutSec}s"
+                    continue
+                }
+                Write-Ok "NVI2 $PackageName exit $($proc.ExitCode)"
+                # Exit 0 from System32 = success; also accept package folder gone
+                $still = @(Get-Nvi2InstalledPackageNames | Where-Object { $_ -eq $PackageName })
+                if ($proc.ExitCode -eq 0) { return $true }
+                if ($still.Count -eq 0) { return $true }
+                # SysWOW64 invalid-arg path - try next rundll
+                if ($proc.ExitCode -eq -2147024809 -or $proc.ExitCode -eq 0x80070057) { break }
+            } catch {
+                Write-Warn "NVI2 uninstall $PackageName : $($_.Exception.Message)"
+            }
+        }
+    }
+
+    # Fallback: cmd.exe with System32 RunDll32 (batch-style quoting)
+    try {
+        $rundll = Join-Path $env:SystemRoot 'System32\RunDll32.EXE'
+        if (Test-Path -LiteralPath $rundll) {
+            $line = "`"$rundll`" `"$nvi2`",UninstallPackage $PackageName -silent -noreboot"
+            Write-Ok "NVI2 cmd fallback: $PackageName"
+            $p = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', $line) -Wait -PassThru -WindowStyle Hidden -ErrorAction SilentlyContinue
+            if ($p) { Write-Ok "NVI2 cmd $PackageName exit $($p.ExitCode)" }
+            if ($p -and $p.ExitCode -eq 0) { return $true }
+            $still = @(Get-Nvi2InstalledPackageNames | Where-Object { $_ -eq $PackageName })
+            if ($still.Count -eq 0) { return $true }
+        }
+    } catch { }
+
+    return $false
+}
+
+function Remove-ExoTreeForce {
+    param([Parameter(Mandatory)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return $true }
+    try {
+        Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+        return $true
+    } catch { }
+    # takeown + icacls then retry (locked App trees after partial uninstall)
+    try {
+        $null = & takeown.exe /F $Path /R /D Y 2>$null
+        $null = & icacls.exe $Path /grant Administrators:F /T /C /Q 2>$null
+        Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+        return $true
+    } catch { }
+    # robocopy mirror empty is reliable for stubborn trees
+    try {
+        $empty = Join-Path $env:TEMP ("exo-empty-" + [guid]::NewGuid().ToString('n'))
+        New-Item -ItemType Directory -Path $empty -Force | Out-Null
+        $null = & robocopy.exe $empty $Path /MIR /R:0 /W:0 /NFL /NDL /NJH /NJS /nc /ns /np 2>$null
+        try { Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue } catch { }
+        try { Remove-Item -LiteralPath $empty -Recurse -Force -ErrorAction SilentlyContinue } catch { }
+        return -not (Test-Path -LiteralPath $Path)
+    } catch {
+        return -not (Test-Path -LiteralPath $Path)
+    }
+}
+
+function Remove-NvidiaAppArpLeftovers {
+    foreach ($rp in @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+    )) {
+        if (-not (Test-Path -LiteralPath $rp)) { continue }
+        Get-ChildItem -LiteralPath $rp -ErrorAction SilentlyContinue | ForEach-Object {
+            $leaf = $_.PSChildName
+            $pkg = $null
+            if ($leaf -match '^[\{]?[0-9A-Fa-f\-]{36}[\}]?_(?<pkg>.+)$') { $pkg = $Matches['pkg'] }
+            $disp = $null
+            $disp = [string](Get-NvoRegValue $_.PSPath 'DisplayName' '')
+            $isApp = $false
+            if ($pkg -and (Test-Nvi2AppPackageName $pkg)) { $isApp = $true }
+            if ($disp -match '(?i)NVIDIA App|GeForce Experience|ShadowPlay|FrameView|NvApp|NVIDIA Backend|NVIDIA MessageBus|NVIDIA Telemetry|NvDLISR|Watchdog Plugin') {
+                if ($disp -notmatch '(?i)Control Panel|Graphics Driver|Virtual Audio|Display Driver') { $isApp = $true }
+            }
+            if (-not $isApp) { return } # continue next ARP entry
+            try {
+                Remove-Item -LiteralPath $_.PSPath -Recurse -Force -ErrorAction Stop
+                Write-Ok "Removed ARP leftover: $leaf"
+            } catch {
+                Write-Warn "ARP remove $leaf : $($_.Exception.Message)"
+            }
+        }
+    }
+    # Clear stuck NVI2 pending uninstall/install for App packages (blocks silent re-runs)
+    $pendingRoot = 'HKLM:\SOFTWARE\NVIDIA Corporation\Installer2\Pending'
+    if (Test-Path -LiteralPath $pendingRoot) {
+        Get-ChildItem -LiteralPath $pendingRoot -ErrorAction SilentlyContinue | ForEach-Object {
+            if (Test-Nvi2AppPackageName $_.PSChildName) {
+                try {
+                    Remove-Item -LiteralPath $_.PSPath -Recurse -Force -ErrorAction Stop
+                    Write-Ok "Cleared NVI2 pending: $($_.PSChildName)"
+                } catch { }
+            }
+        }
+    }
+}
+
+function Remove-NvidiaAudioComponents {
+    # User policy: Display.Driver + classic Control Panel ONLY. No Virtual Audio / HD Audio.
+    Write-Step 'Removing NVIDIA Virtual Audio / HD Audio (not needed)...'
+    $pkgs = [System.Collections.Generic.List[string]]::new()
+    foreach ($p in @('VirtualAudio.Driver', 'HDAudio.Driver', 'Display.Audio', 'HDAudio')) {
+        if (-not $pkgs.Contains($p)) { [void]$pkgs.Add($p) }
+    }
+    foreach ($p in @(Get-Nvi2InstalledPackageNames | Where-Object { Test-Nvi2AudioPackageName $_ })) {
+        if (-not $pkgs.Contains($p)) { [void]$pkgs.Add($p) }
+    }
+    foreach ($pkg in $pkgs) {
+        [void](Invoke-Nvi2UninstallPackage -PackageName $pkg -TimeoutSec 75)
+    }
+
+    # Disable leftover PnP audio endpoints so they cannot reappear as default devices
+    try {
+        Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object {
+            $_.FriendlyName -match '(?i)NVIDIA.*(High Definition Audio|Virtual Audio)|NVIDIA Virtual Audio'
+        } | ForEach-Object {
+            try {
+                Write-Ok "Disabling audio device: $($_.FriendlyName)"
+                Disable-PnpDevice -InstanceId $_.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
+            } catch { }
+            try {
+                Remove-PnpDevice -InstanceId $_.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
+            } catch { }
+        }
+    } catch { }
+
+    # Installer2 leftover folders + common install roots
+    foreach ($i2 in @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Installer2'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Installer2')
+    )) {
+        if (-not (Test-Path -LiteralPath $i2)) { continue }
+        Get-ChildItem -LiteralPath $i2 -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+            $base = if ($_.Name -match '^(?<pkg>.+)\.\{[0-9A-Fa-f\-]{36}\}$') { $Matches['pkg'] } else { $_.Name }
+            if (Test-Nvi2AudioPackageName $base) {
+                if (Remove-ExoTreeForce -Path $_.FullName) {
+                    Write-Ok "Removed audio package folder: $($_.Name)"
+                }
+            }
+        }
+    }
+    foreach ($dir in @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Virtual Audio'),
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\HD Audio'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Virtual Audio')
+    )) {
+        if (Test-Path -LiteralPath $dir) { [void](Remove-ExoTreeForce -Path $dir) }
+    }
+
+    # ARP leftovers
+    foreach ($rp in @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+    )) {
+        if (-not (Test-Path -LiteralPath $rp)) { continue }
+        Get-ChildItem -LiteralPath $rp -ErrorAction SilentlyContinue | ForEach-Object {
+            $leaf = $_.PSChildName
+            $pkg = $null
+            if ($leaf -match '^[\{]?[0-9A-Fa-f\-]{36}[\}]?_(?<pkg>.+)$') { $pkg = $Matches['pkg'] }
+            $disp = $null
+            $disp = [string](Get-NvoRegValue $_.PSPath 'DisplayName' '')
+            $isAudio = ($pkg -and (Test-Nvi2AudioPackageName $pkg)) -or
+                       ($disp -match '(?i)NVIDIA Virtual Audio|NVIDIA HD Audio|NVIDIA High Definition Audio')
+            if (-not $isAudio) { return }
+            try {
+                Remove-Item -LiteralPath $_.PSPath -Recurse -Force -ErrorAction Stop
+                Write-Ok "Removed audio ARP: $leaf"
+            } catch { }
+        }
+    }
+
+    $stillPkg = @(Get-Nvi2InstalledPackageNames | Where-Object { Test-Nvi2AudioPackageName $_ })
+    $stillDev = @(Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object {
+        $_.Status -eq 'OK' -and $_.FriendlyName -match '(?i)NVIDIA.*(High Definition Audio|Virtual Audio)|NVIDIA Virtual Audio'
+    })
+    if ($stillPkg.Count -eq 0 -and $stillDev.Count -eq 0) {
+        Write-Ok 'NVIDIA audio components cleared (driver + Control Panel only)'
+        return $true
+    }
+    Write-Warn ("NVIDIA audio still present: packages=[{0}] devices=[{1}]" -f ($stillPkg -join ','), (($stillDev | ForEach-Object FriendlyName) -join ','))
+    return $false
+}
+
+function Remove-NvidiaBloatComponents {
+    # Same NVI2 silent-uninstall mechanism as the audio strip, extended to the
+    # remaining install-time bloat: ShadowPlay, NvBackend, NodeJS, telemetry
+    # sub-packages. Keeps Display.Driver + PhysX. No INF edits, no EAC strip.
+    Write-Step 'Stripping NVI2 bloat packages (ShadowPlay / NvBackend / NodeJS / telemetry)...'
+    $present = @(Get-Nvi2InstalledPackageNames | Where-Object { Test-Nvi2BloatPackageName $_ })
+    if ($present.Count -eq 0) {
+        Write-Ok 'No NVI2 bloat packages registered (ShadowPlay / NvBackend / NodeJS / telemetry absent)'
+    }
+    foreach ($pkg in $present) {
+        [void](Invoke-Nvi2UninstallPackage -PackageName $pkg -TimeoutSec 75)
+    }
+
+    # Leftover Installer2 folders for the same package families
+    foreach ($i2 in @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Installer2'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Installer2')
+    )) {
+        if (-not (Test-Path -LiteralPath $i2)) { continue }
+        Get-ChildItem -LiteralPath $i2 -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+            $base = if ($_.Name -match '^(?<pkg>.+)\.\{[0-9A-Fa-f\-]{36}\}$') { $Matches['pkg'] } else { $_.Name }
+            if (Test-Nvi2BloatPackageName $base) {
+                if (Remove-ExoTreeForce -Path $_.FullName) {
+                    Write-Ok "Removed bloat package folder: $($_.Name)"
+                }
+            }
+        }
+    }
+
+    $still = @(Get-Nvi2InstalledPackageNames | Where-Object { Test-Nvi2BloatPackageName $_ })
+    if ($still.Count -eq 0) {
+        Write-Ok 'NVI2 bloat strip complete (Display.Driver + PhysX preserved)'
+        return $true
+    }
+    Write-Warn ("NVI2 bloat packages still registered after strip: {0}" -f ($still -join ', '))
+    return $false
+}
+
+function Remove-NvidiaClientTraces {
+    # Wipe App + GFE via NVI2 silent uninstall (no winget - too slow / flaky).
+    # KEEP classic Control Panel Store package + Display.Driver only (no audio, no App).
+    Write-Step 'Wiping NVIDIA App + GFE (silent NVI2, no prompts, no winget)...'
+    Stop-NvidiaClientProcesses
+
+    $preferredOrder = @(
+        'Display.NvApp.MessageBus',
+        'Display.NvApp.NvBackend',
+        'Display.NvApp.NvCPL',
+        'ShadowPlay',
+        'FrameViewSdk',
+        'NvPlugin.Watchdog',
+        'NvTelemetry',
+        'NvDLISR',
+        'Display.NvApp',
+        'Display.GFExperience',
+        'GFExperience'
+    )
+    $discovered = @(Get-Nvi2InstalledPackageNames | Where-Object { Test-Nvi2AppPackageName $_ })
+    $toRemove = [System.Collections.Generic.List[string]]::new()
+    foreach ($p in $preferredOrder) {
+        if ($discovered -contains $p -or $true) {
+            # Always try preferred names (NVI2 no-ops if missing)
+            if (-not $toRemove.Contains($p)) { [void]$toRemove.Add($p) }
+        }
+    }
+    foreach ($p in $discovered) {
+        if (-not $toRemove.Contains($p)) { [void]$toRemove.Add($p) }
+    }
+
+    Write-Ok ("NVI2 App packages to remove: " + ($toRemove -join ', '))
+    foreach ($pkg in $toRemove) {
+        Stop-NvidiaClientProcesses
+        [void](Invoke-Nvi2UninstallPackage -PackageName $pkg -TimeoutSec 75)
+    }
+
+    # Second pass for anything still registered
+    $left = @(Get-Nvi2InstalledPackageNames | Where-Object { Test-Nvi2AppPackageName $_ })
+    if ($left.Count -gt 0) {
+        Write-Warn ("Retry NVI2 for remaining: " + ($left -join ', '))
+        Stop-NvidiaClientProcesses
+        foreach ($pkg in $left) {
+            [void](Invoke-Nvi2UninstallPackage -PackageName $pkg -TimeoutSec 90)
+        }
+    }
+
+    # Remove App / GFE Appx only - never NVIDIA Control Panel Store package.
+    $appxTargets = @(Get-AppxPackage -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -match '(?i)NVIDIAApp|NVIDIA\.App|GeForceExperience' -and
+        $_.Name -notmatch '(?i)ControlPanel'
+    })
+    foreach ($pkg in $appxTargets) {
+        try {
+            Write-Ok "Removing Appx package: $($pkg.Name)"
+            Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction Stop
+        } catch {
+            Write-Warn "Appx remove $($pkg.Name): $($_.Exception.Message)"
+        }
+        try {
+            # Elevated: also strip for all users when possible
+            Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -eq $pkg.Name -and $_.Name -notmatch '(?i)ControlPanel' } |
+                ForEach-Object {
+                    try { Remove-AppxPackage -Package $_.PackageFullName -AllUsers -ErrorAction SilentlyContinue } catch { }
+                }
+        } catch { }
+    }
+
+    # No winget uninstall - it is slow, often interactive, and does not drive NVI2 well.
+
+    # App / GFE folders only - never Control Panel Client paths.
+    $folderTargets = @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App'),
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA Overlay'),
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA GeForce Experience'),
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\GeForce Experience'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\NVIDIA App'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\NVIDIA GeForce Experience'),
+        (Join-Path $env:LOCALAPPDATA 'NVIDIA Corporation\NVIDIA App'),
+        (Join-Path $env:LOCALAPPDATA 'NVIDIA Corporation\NVIDIA GeForce Experience'),
+        (Join-Path $env:PROGRAMDATA 'NVIDIA Corporation\NVIDIA App'),
+        (Join-Path $env:PROGRAMDATA 'NVIDIA Corporation\GeForce Experience'),
+        # Official App payload cache used by NVI2 (Pending PackageConfig paths)
+        'C:\NVIDIA\NVAPP2',
+        'C:\NVIDIA\Display.NvApp',
+        (Join-Path $env:ProgramData 'NVIDIA\NVAPP2')
+    )
+    # Leftover Installer2 component folders for App packages
+    foreach ($i2 in @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Installer2'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Installer2')
+    )) {
+        if (-not (Test-Path -LiteralPath $i2)) { continue }
+        Get-ChildItem -LiteralPath $i2 -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+            $base = if ($_.Name -match '^(?<pkg>.+)\.\{[0-9A-Fa-f\-]{36}\}$') { $Matches['pkg'] } else { $_.Name }
+            if (Test-Nvi2AppPackageName $base) { $folderTargets += $_.FullName }
+        }
+    }
+
+    Stop-NvidiaClientProcesses
+    Start-Sleep -Milliseconds 500
+    foreach ($dir in ($folderTargets | Select-Object -Unique)) {
+        if (Test-Path -LiteralPath $dir) {
+            if (Remove-ExoTreeForce -Path $dir) {
+                Write-Ok "Removed client folder: $dir"
+            } else {
+                Write-Warn "Could not fully remove $dir"
+            }
+        }
+    }
+
+    Remove-NvidiaAppArpLeftovers
+    Remove-NvidiaAppDesktopShortcuts | Out-Null
+    $appGone = -not (Test-NvidiaAppInstalled)
+    $cplOk = Test-NvidiaControlPanelInstalled
+    if ($appGone) { Write-Ok 'NVIDIA App / GFE traces cleared' } else { Write-Warn 'NVIDIA App still detected after wipe' }
+    if ($cplOk) { Write-Ok 'Classic Control Panel kept (optional UI)' } else { Write-Ok 'Classic Control Panel not present - Exo applies display via NVAPI; install the panel yourself if you want NVIDIA''s UI' }
+    return [pscustomobject]@{
+        AppCleared = [bool]$appGone
+        ControlPanelPresent = [bool]$cplOk
+        PackagesTried = @($toRemove)
+    }
+}
+
+function Set-ExoRegDword {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][int]$Value
+    )
+    if (-not (Test-Path -LiteralPath $Path)) {
+        try { New-Item -Path $Path -Force | Out-Null } catch { return }
+    }
+    try {
+        Set-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -Type DWord -Force -ErrorAction Stop
+    } catch {
+        try {
+            New-ItemProperty -LiteralPath $Path -Name $Name -PropertyType DWord -Value $Value -Force -ErrorAction SilentlyContinue | Out-Null
+        } catch { }
+    }
+}
+
+
+
+
+
+function Set-NvidiaWindowsNotificationsOff {
+    # Quiet Windows: disable NVIDIA App / Control Panel / GFE toast banners.
+    Write-Step 'Disabling Windows notifications for NVIDIA clients...'
+    $base = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
+    if (-not (Test-Path -LiteralPath $base)) {
+        New-Item -Path $base -Force | Out-Null
+    }
+
+    $setOff = {
+        param([string]$Id)
+        $path = Join-Path $base $Id
+        if (-not (Test-Path -LiteralPath $path)) { New-Item -Path $path -Force | Out-Null }
+        Set-ItemProperty -Path $path -Name 'Enabled' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $path -Name 'ShowInActionCenter' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+    }
+
+    $ids = @(
+        'NVIDIA App',
+        'com.nvidia.nvapp',
+        'NVIDIACorp.NVIDIAControlPanel_56jybvy8sckqj!NVIDIACorp.NVIDIAControlPanel',
+        'NVIDIACorp.NVIDIAControlPanel_56jybvy8sckqj',
+        'NVIDIA GeForce Experience',
+        'NVIDIA Share',
+        'NVIDIA Overlay',
+        'NVIDIA Container',
+        'NvContainer'
+    )
+    foreach ($id in $ids) { & $setOff $id }
+
+    # Any existing notification keys that look NVIDIA-related
+    $n = 0
+    Get-ChildItem $base -ErrorAction SilentlyContinue | ForEach-Object {
+        $name = $_.PSChildName
+        if ($name -match '(?i)nvidia|geforce|nvapp|nvcontainer|shadowplay') {
+            Set-ItemProperty -Path $_.PSPath -Name 'Enabled' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path $_.PSPath -Name 'ShowInActionCenter' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+            $n++
+            Write-Ok "Windows toasts off: $name"
+        }
+    }
+    if ($n -eq 0) { Write-Ok 'Windows NVIDIA toast keys seeded (will stick after first App/CPL toast)' }
+    else { Write-Ok "Windows NVIDIA toasts disabled ($n keys)" }
+}
+
+function Disable-NvidiaOverlay {
+    Write-Step 'Stopping NVIDIA App/GFE background clients and disabling the overlay...'
+    foreach ($n in @('NVIDIA App', 'NVIDIA Overlay', 'NVIDIA Share', 'nvsphelper64', 'nvsphelper', 'NVIDIA Web Helper', 'GFExperience')) {
+        Get-Process -Name $n -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    }
+    foreach ($im in @('NVIDIA App.exe', 'NVIDIA Overlay.exe', 'NVIDIA Share.exe', 'NVIDIA Web Helper.exe', 'nvsphelper64.exe', 'GFExperience.exe')) {
+        try { & taskkill.exe /F /IM $im /T 2>$null | Out-Null } catch { }
+    }
+
+    # ShadowPlay / overlay caps off (binary 0 = disabled style values used by NVSP)
+    $sp = 'HKCU:\Software\NVIDIA Corporation\Global\ShadowPlay\NVSPCAPS'
+    if (-not (Test-Path $sp)) {
+        try { New-Item -Path $sp -Force | Out-Null } catch { }
+    }
+    if (Test-Path $sp) {
+        foreach ($name in @(
+            'RecEnabled', 'DwmEnabled', 'DwmDvrEnabledV1', 'DisplayRecordingIndicator',
+            'DisplayGamecastIndicator', 'GameStreamPortal', 'OverlayEnabled', 'ShowOverlay',
+            'IsShadowPlayEnabled', 'IsShadowPlayEnabledUser', 'EnableMicrophone'
+        )) {
+            try {
+                New-ItemProperty -LiteralPath $sp -Name $name -PropertyType Binary -Value ([byte[]](0, 0, 0, 0)) -Force -ErrorAction SilentlyContinue | Out-Null
+            } catch { }
+        }
+        Write-Ok 'ShadowPlay/overlay caps set off (registry)'
+    }
+
+    # App-side overlay + notification + capture toggles (HKCU + HKLM mirror)
+    $offDwords = @(
+        'OverlayEnabled', 'EnableOverlay', 'ShowOverlay', 'InGameOverlay',
+        'EnableNotifications', 'NotificationsEnabled', 'ShowNotifications',
+        'NotifyNewDisplayUpdates', 'NotifyDriverUpdates', 'NotifyRewards',
+        'NotifyHighlights', 'ToastNotifications', 'EnableToasts',
+        'EnableInstantReplay', 'InstantReplay', 'EnableHighlights', 'EnableAnsel',
+        'EnableFreestyle', 'EnablePhotoMode', 'EnableGameFilters', 'EnableGameStream',
+        'ShareEnabled', 'EnableRewards', 'EnableDiscover', 'EnableTelemetry',
+        'RunAtStartup', 'AutoStart', 'StartOnLogin', 'AllowAutoDownload', 'AutoDownload',
+        'SilentInstalls'
+    )
+    foreach ($p in @(
+        'HKCU:\Software\NVIDIA Corporation\NVIDIA App',
+        'HKLM:\SOFTWARE\NVIDIA Corporation\NVIDIA App',
+        'HKCU:\Software\NVIDIA Corporation\Global\GFExperience',
+        'HKCU:\Software\NVIDIA Corporation\Global\NvApp'
+    )) {
+        if (-not (Test-Path -LiteralPath $p)) {
+            try { New-Item -Path $p -Force | Out-Null } catch { continue }
+        }
+        foreach ($name in $offDwords) {
+            Set-ExoRegDword -Path $p -Name $name -Value 0
+        }
+    }
+
+    # Remove known per-user auto-start entries while preserving installed App/GFE files.
+    $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+    if (Test-Path -LiteralPath $runKey) {
+        $runValues = Get-ItemProperty -LiteralPath $runKey -ErrorAction SilentlyContinue
+        foreach ($property in $runValues.PSObject.Properties) {
+            if ($property.Name -like 'PS*') { continue }
+            $signature = "$($property.Name) $($property.Value)"
+            if ($signature -match '(?i)NVIDIA App|GeForce Experience|GFExperience|NvBackend|ShadowPlay|FrameView') {
+                Remove-ItemProperty -LiteralPath $runKey -Name $property.Name -Force -ErrorAction SilentlyContinue
+                Write-Ok "Disabled NVIDIA auto-start entry: $($property.Name)"
+            }
+        }
+    }
+
+    Write-Ok 'NVIDIA App/GFE overlay + notifications disabled; Display.Driver + Control Panel only (audio stripped)'
+}
+
+
+
+
+function Test-NvidiaOverlayDisabled {
+    $issues = New-Object System.Collections.Generic.List[string]
+
+    $overlayProcesses = @(Get-Process -Name @(
+        'NVIDIA Overlay', 'NVIDIA Share', 'nvsphelper', 'nvsphelper64') -ErrorAction SilentlyContinue)
+    if ($overlayProcesses.Count -gt 0) {
+        [void]$issues.Add("Overlay processes still running: $($overlayProcesses.ProcessName -join ', ')")
+    }
+
+    # Only require keys that exist - missing keys after Disable-NvidiaOverlay are treated as OK
+    # when we just wrote them; if write failed, explicit non-zero fails.
+    foreach ($path in @(
+        'HKCU:\Software\NVIDIA Corporation\NVIDIA App',
+        'HKCU:\Software\NVIDIA Corporation\Global\GFExperience'
+    )) {
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        $properties = Get-ItemProperty -LiteralPath $path -ErrorAction SilentlyContinue
+        foreach ($name in @('OverlayEnabled', 'EnableOverlay')) {
+            $property = if ($properties) { $properties.PSObject.Properties[$name] } else { $null }
+            if ($property -and [int]$property.Value -ne 0) {
+                [void]$issues.Add("Overlay preference is still on: $path\\$name")
+            }
+        }
+    }
+
+    $capsPath = 'HKCU:\Software\NVIDIA Corporation\Global\ShadowPlay\NVSPCAPS'
+    if (Test-Path -LiteralPath $capsPath) {
+        $caps = Get-ItemProperty -LiteralPath $capsPath -ErrorAction SilentlyContinue
+        foreach ($name in @('RecEnabled', 'DwmEnabled', 'DwmDvrEnabledV1', 'DisplayRecordingIndicator', 'DisplayGamecastIndicator', 'GameStreamPortal')) {
+            $property = if ($caps) { $caps.PSObject.Properties[$name] } else { $null }
+            if (-not $property) { continue }
+            $bytes = @($property.Value)
+            if (@($bytes | Where-Object { [int]$_ -ne 0 }).Count -gt 0) {
+                [void]$issues.Add("ShadowPlay capture preference is not disabled: $name")
+            }
+        }
+    }
+
+    return [pscustomobject]@{
+        Ok     = [bool]($issues.Count -eq 0)
+        Issues = @($issues)
+    }
+}
+
+
+function Get-WindowsDriverVersionString {
+    try {
+        $gpu = Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '(?i)nvidia|geforce|rtx|gtx' } |
+            Select-Object -First 1
+        return [string]$gpu.DriverVersion
+    } catch { return '' }
+}
+
+function Convert-WindowsDriverToNvidia([string]$WinVer) {
+    # WDDM DCH encoding: last 5 digits of c*10000+d => major.minor (e.g. 32.0.15.6094 -> 560.94)
+    try {
+        $parts = $WinVer -split '\.'
+        if ($parts.Count -lt 4) { return $null }
+        $c = [int]$parts[2]
+        $d = [int]$parts[3]
+        $combined = ($c * 10000 + $d).ToString()
+        if ($combined.Length -lt 5) { $combined = $combined.PadLeft(5, '0') }
+        $last5 = $combined.Substring($combined.Length - 5)
+        $major = [int]$last5.Substring(0, 3)
+        $minor = [int]$last5.Substring(3, 2)
+        return ('{0}.{1:D2}' -f $major, $minor)
+    } catch { return $null }
+}
+
+function Get-ExoDriverLookupTargets {
+    param([string]$SeriesId = '')
+    # NVIDIA menu product series (psid) + representative desktop product (pfid).
+    # CRITICAL: 10-series (GTX 1080 etc.) is on a legacy security branch (~582.x), NOT the
+    # modern 20/30/40/50 Game Ready line (610.x). Using a 40/50 product ID offers an
+    # unusable package to Pascal GPUs.
+    $base = 'https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup'
+    $q = '&osID=57&languageCode=1033&beta=0&isWHQL=1&dltype=-1&dch=1&upCRD=0&qnf=0&ctk=null&windowsVersion=10.0&windowsArchitecture=64bit'
+    switch ($SeriesId) {
+        '10' {
+            # GeForce 10 Series / GTX 1080 (psid=101, pfid=815)
+            return @(
+                "$base&psid=101&pfid=815$q",
+                "$base&psid=101&pfid=817$q"   # GTX 1060 fallback
+            )
+        }
+        '20' {
+            return @(
+                "$base&psid=107&pfid=879$q",  # RTX 2080
+                "$base&psid=107&pfid=887$q"   # RTX 2060
+            )
+        }
+        '30' {
+            return @(
+                "$base&psid=120&pfid=933$q",  # RTX 3070
+                "$base&psid=120&pfid=929$q"   # RTX 3080
+            )
+        }
+        '40' {
+            return @(
+                "$base&psid=127&pfid=995$q",  # RTX 4090
+                "$base&psid=127&pfid=1015$q"  # RTX 4070
+            )
+        }
+        '50' {
+            return @(
+                "$base&psid=131&pfid=1066$q", # RTX 5090
+                "$base&psid=131&pfid=1070$q"  # RTX 5070
+            )
+        }
+        default {
+            # Unknown series: prefer 30/40 desktop matrix (not 10-series legacy, not notebook psid).
+            return @(
+                "$base&psid=120&pfid=933$q",
+                "$base&psid=127&pfid=995$q"
+            )
+        }
+    }
+}
+
+function Get-LatestGameReadyDriver {
+    param([string]$SeriesId = '')
+    # Query the newest driver package that is valid for THIS GPU series branch.
+    $urls = @(Get-ExoDriverLookupTargets -SeriesId $SeriesId)
+    foreach ($url in $urls) {
+        try {
+            $r = Invoke-RestMethod -Uri $url -Headers @{ 'User-Agent' = 'Exo-Nvidia/1.2' } -TimeoutSec 25
+            if (-not $r -or $r.Success -ne '1') { continue }
+            $info = $r.IDS[0].downloadInfo
+            if (-not $info -or [string]$info.Version -notmatch '^\d{3}\.\d{2}$') { continue }
+            return [pscustomobject]@{
+                Version     = [string]$info.Version
+                DownloadUrl = [uri]::UnescapeDataString([string]$info.DownloadURL)
+                Name        = [uri]::UnescapeDataString([string]$info.Name)
+                ReleaseDate = [string]$info.ReleaseDateTime
+                Size        = [string]$info.DownloadURLFileSize
+                SeriesId    = [string]$SeriesId
+            }
+        } catch {
+            Write-Warn "Latest-driver lookup failed: $($_.Exception.Message)"
+        }
+    }
+    return $null
+}
+
+function Compare-NvidiaVersion([string]$A, [string]$B) {
+    # returns: -1 if A<B, 0 equal, 1 if A>B
+    try {
+        $va = [version](($A -replace '[^\d\.]', '') -replace '^\.', '0.')
+        $vb = [version](($B -replace '[^\d\.]', '') -replace '^\.', '0.')
+        if ($va -lt $vb) { return -1 }
+        if ($va -gt $vb) { return 1 }
+        return 0
+    } catch {
+        if ($A -eq $B) { return 0 }
+        if ($A -lt $B) { return -1 }
+        return 1
+    }
+}
+
+function Find-NanaZipCli {
+    # NanaZipC = 7z-compatible CLI (preferred). Never install/use 7-Zip.
+    $candidates = @(
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\NanaZipC.exe'),
+        (Join-Path $env:ProgramFiles 'NanaZip\NanaZipC.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NanaZip\NanaZipC.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\NanaZip\NanaZipC.exe')
+    )
+    foreach ($c in $candidates) {
+        if ($c -and (Test-Path -LiteralPath $c)) { return $c }
+    }
+    $cmd = Get-Command NanaZipC -ErrorAction SilentlyContinue
+    if ($cmd -and $cmd.Source) { return $cmd.Source }
+    # WinGet package layout
+    $wg = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
+    if (Test-Path $wg) {
+        $hit = Get-ChildItem $wg -Recurse -Filter 'NanaZipC.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($hit) { return $hit.FullName }
+    }
+    return $null
+}
+
+function Ensure-NanaZip {
+    $existing = Find-NanaZipCli
+    if ($existing) { return $existing }
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if (-not $winget) {
+        Write-Warn 'NanaZip not found and winget unavailable'
+        return $null
+    }
+    Write-Step 'Installing NanaZip (extracts NVIDIA package for Exo Clean Driver)...'
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & winget install --id M2Team.NanaZip -e --accept-package-agreements --accept-source-agreements --silent 2>&1 | Out-Null
+    } catch { }
+    $ErrorActionPreference = $prev
+    return (Find-NanaZipCli)
+}
+
+function Test-NvidiaDownloadUri([string]$Url) {
+    try {
+        $uri = [uri]$Url
+        return $uri.Scheme -eq 'https' -and $uri.Host -match '(?i)(^|\.)nvidia\.com$'
+    } catch {
+        return $false
+    }
+}
+
+function Test-NvidiaSignedFile([string]$Path) {
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path)) { return $false }
+    try {
+        $signature = Get-AuthenticodeSignature -LiteralPath $Path -ErrorAction Stop
+        $subject = [string]$signature.SignerCertificate.Subject
+        if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid -or
+            $subject -notmatch '(?i)NVIDIA\s+Corporation') {
+            Write-Warn "Driver package signature rejected (status=$($signature.Status), signer=$subject)"
+            return $false
+        }
+        Write-Ok "Verified NVIDIA Authenticode signature: $subject"
+        return $true
+    } catch {
+        Write-Warn "Driver package signature check failed: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Test-NvidiaDriverPackage([string]$Path) {
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path)) { return $false }
+    if ((Get-Item -LiteralPath $Path).Length -lt 50MB) {
+        Write-Warn "Driver package is unexpectedly small: $Path"
+        return $false
+    }
+    return (Test-NvidiaSignedFile $Path)
+}
+
+function Download-NvidiaDriverPackage {
+    param(
+        [Parameter(Mandatory)][string]$Url,
+        [Parameter(Mandatory)][string]$Version
+    )
+    if (-not (Test-NvidiaDownloadUri $Url)) {
+        throw 'NVIDIA driver URL must use HTTPS on an nvidia.com host'
+    }
+    if ($Version -notmatch '^\d{3}\.\d{2}$') {
+        throw "Unexpected NVIDIA driver version: $Version"
+    }
+    if (-not (Test-Path $DriverCacheDir)) {
+        New-Item -ItemType Directory -Path $DriverCacheDir -Force | Out-Null
+    }
+    $fileName = "GameReady-$Version-win10-win11-64bit-dch.exe"
+    $outFile = Join-Path $DriverCacheDir $fileName
+
+    if (Test-Path -LiteralPath $outFile) {
+        if (Test-NvidiaDriverPackage $outFile) {
+            Write-Ok "Using verified cached driver package: $outFile"
+            return $outFile
+        }
+        Write-Warn 'Removing invalid cached driver package'
+        Remove-Item -LiteralPath $outFile -Force -ErrorAction Stop
+    }
+
+    Write-Step "Downloading official Game Ready $Version (one package, cached for re-runs)..."
+    Write-HubProgress 22 "Downloading Game Ready $Version..."
+    $tmp = "$outFile.partial.exe"
+    try {
+        if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+
+        $usedBits = $false
+        try {
+            Import-Module BitsTransfer -ErrorAction Stop
+            Start-BitsTransfer -Source $Url -Destination $tmp -DisplayName "Exo NVIDIA $Version" -Description 'Game Ready driver'
+            $usedBits = $true
+        } catch {
+            $usedBits = $false
+        }
+        if (-not $usedBits) {
+            $wc = New-Object System.Net.WebClient
+            $wc.Headers['User-Agent'] = 'Exo-Nvidia/1.2'
+            try {
+                $wc.DownloadFile($Url, $tmp)
+            } finally {
+                $wc.Dispose()
+            }
+        }
+
+        if (-not (Test-Path -LiteralPath $tmp) -or ((Get-Item -LiteralPath $tmp).Length -lt 50MB)) {
+            throw 'Driver download incomplete or too small'
+        }
+        if (-not (Test-NvidiaDriverPackage $tmp)) {
+            throw 'Downloaded driver failed NVIDIA Authenticode verification'
+        }
+        Move-Item -LiteralPath $tmp -Destination $outFile -Force
+        Write-Ok "Downloaded: $outFile ($([math]::Round((Get-Item $outFile).Length / 1MB, 1)) MB)"
+        Write-HubProgress 38 'Driver package ready'
+        return $outFile
+    } catch {
+        try { if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue } } catch { }
+        throw "Driver download failed: $($_.Exception.Message)"
+    }
+}
+
+function Expand-NvidiaDriverPackage {
+    param(
+        [Parameter(Mandatory)][string]$PackageExe,
+        [Parameter(Mandatory)][string]$DestDir
+    )
+    # Reuse full extract if present (folder-strip was removed; incomplete extracts are deleted)
+    $existingSetup = Join-Path $DestDir 'setup.exe'
+    $existingDriver = Join-Path $DestDir 'Display.Driver'
+    if ((Test-Path -LiteralPath $existingSetup) -and (Test-Path -LiteralPath $existingDriver)) {
+        # Need Display.Driver + NVI2 for the component-filtered display-driver install.
+        $ok = (Test-Path -LiteralPath (Join-Path $DestDir 'NVI2'))
+        if ($ok -and (Test-NvidiaSignedFile $existingSetup)) {
+            Write-Ok "Using verified existing extract: $DestDir"
+            return $existingSetup
+        }
+        Write-Warn 'Existing driver extract is incomplete or failed signature verification; rebuilding it'
+    }
+    if (Test-Path -LiteralPath $DestDir) {
+        Remove-Item -LiteralPath $DestDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    New-Item -ItemType Directory -Path $DestDir -Force | Out-Null
+    Write-Step 'Extracting official package for Exo Clean Driver (NanaZip)...'
+    Write-HubProgress 40 'Extracting driver package...'
+
+    $nana = Ensure-NanaZip
+    if ($nana) {
+        $prev = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        # NanaZipC is 7z-compatible CLI
+        & $nana x $PackageExe "-o$DestDir" -y 2>&1 | Out-Null
+        $ErrorActionPreference = $prev
+        $setup = Get-ChildItem -LiteralPath $DestDir -Recurse -Filter 'setup.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($setup -and (Test-NvidiaSignedFile $setup.FullName)) {
+            Write-Ok "Extracted with NanaZip: $($setup.DirectoryName)"
+            return $setup.FullName
+        }
+        Write-Warn 'NanaZip extract did not contain a valid NVIDIA-signed setup.exe'
+    } else {
+        Write-Warn 'NanaZip CLI not available'
+    }
+
+    # NVIDIA self-extractors (fallback when NanaZip missing)
+    $argSets = @(
+        @('-s', '-x', "-b`"$DestDir`""),
+        @('-s', "-extract:`"$DestDir`""),
+        @('/s', '/x', "/b`"$DestDir`"")
+    )
+    foreach ($args in $argSets) {
+        try {
+            $null = Start-Process -FilePath $PackageExe -ArgumentList $args -Wait -PassThru -WindowStyle Hidden -ErrorAction SilentlyContinue
+            $setup = Get-ChildItem -LiteralPath $DestDir -Recurse -Filter 'setup.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($setup -and (Test-NvidiaSignedFile $setup.FullName)) {
+                Write-Ok "Extracted via package switches: $($setup.DirectoryName)"
+                return $setup.FullName
+            }
+        } catch { }
+    }
+    return $null
+}
+
+function Install-ExoCleanDriver {
+    param(
+        [Parameter(Mandatory)][string]$DownloadUrl,
+        [Parameter(Mandatory)][string]$Version
+    )
+    # Exo Clean Driver (NVCleanstall-class, OUR rules - better for silent):
+    #  1) Official Game Ready once (cached)
+    #  2) Extract (folders stay on disk so setup.exe resolves; we do NOT install bloat)
+    #  3) Silent CLEAN install of Display.Driver ONLY (no App, no Virtual/HD Audio, no PhysX)
+    #  4) Strip any leftover audio components from prior full installs
+    #  5) Post-install expert tweaks (MSI High, telemetry off, Ansel off, HDCP off)
+    #  6) Continue pipeline (no forced reboot) - classic Control Panel is separate Store UI
+    Write-Step "Exo Clean Driver install ($Version) - Display.Driver component only"
+    Write-HubProgress 20 "Exo Clean Driver $Version..."
+
+    $package = Coerce-StringPath (Download-NvidiaDriverPackage -Url $DownloadUrl -Version $Version)
+    if (-not $package -or -not (Test-Path -LiteralPath $package)) {
+        Write-Warn "Driver package path invalid after download: $package"
+        return @{ Success = $false; ExitCode = -1; Error = 'bad-package-path'; Method = 'exo-clean' }
+    }
+    Write-Ok "Package file: $package"
+
+    $extractDir = Join-Path $DriverCacheDir "extract-$Version"
+    $setup = Coerce-StringPath (Expand-NvidiaDriverPackage -PackageExe $package -DestDir $extractDir)
+
+    $exitCode = -1
+    if ($setup -and (Test-Path -LiteralPath $setup)) {
+        $setupDir = Split-Path -Parent $setup
+        # Component filter: Display.Driver only. Audio/App/PhysX stay out of the install set.
+        # NVIDIA documents `setup.exe -s -n Display.Driver`; try clean mode first,
+        # then the documented component-only form if that build rejects -clean.
+        $argVariants = @(
+            @('-s', '-n', '-clean', 'Display.Driver'),
+            @('-s', '-n', 'Display.Driver')
+        )
+        Write-HubProgress 55 'Clean-installing Display.Driver only (silent, no automatic reboot)...'
+        foreach ($setupArgs in $argVariants) {
+            Write-Ok ("Running: setup.exe " + ($setupArgs -join ' ') + " (cwd=$setupDir)")
+            $p = Start-Process -FilePath $setup -ArgumentList $setupArgs -WorkingDirectory $setupDir -Wait -PassThru -WindowStyle Hidden
+            if ($p) { $exitCode = [int]$p.ExitCode }
+            Write-Ok "setup.exe exit: $exitCode"
+            if (@(0, 1) -contains $exitCode) { break }
+        }
+    } else {
+        Write-Warn 'Extract failed - cannot safely silent-install without the Display.Driver component filter'
+        return @{ Success = $false; ExitCode = -1; Error = 'extract-failed'; Method = 'exo-clean' }
+    }
+
+    # NVIDIA documented codes: 0 = success, 1 = success/restart required.
+    $okCodes = @(0, 1)
+    if ($okCodes -contains $exitCode) {
+        Start-Sleep -Seconds 2
+        $installedVersion = Convert-WindowsDriverToNvidia (Get-WindowsDriverVersionString)
+        if ($exitCode -eq 0 -and $installedVersion -and
+            (Compare-NvidiaVersion $installedVersion $Version) -lt 0) {
+            Write-Warn "Installer returned success, but driver verification found $installedVersion instead of $Version"
+            return @{
+                Success = $false; ExitCode = $exitCode; Error = 'version-verification-failed'
+                ExpectedVersion = $Version; InstalledVersion = $installedVersion
+                Package = $package; Setup = $setup; Method = 'exo-clean'
+            }
+        }
+        $rebootRequired = ($exitCode -eq 1)
+        Write-Ok "Exo Clean Driver finished (exit $exitCode, restart required=$rebootRequired)"
+        return @{
+            Success          = $true
+            ExitCode         = $exitCode
+            RebootRequired   = $rebootRequired
+            InstalledVersion = $installedVersion
+            Package          = $package
+            Setup            = $setup
+            Method           = 'exo-clean'
+        }
+    }
+    $hex = 'unknown'
+    try { $hex = ('{0:X8}' -f [uint32]([int]$exitCode)) } catch { }
+    Write-Warn "Exo Clean Driver setup exit $exitCode (0x$hex)"
+    return @{
+        Success  = $false
+        ExitCode = $exitCode
+        Package  = $package
+        Setup    = $setup
+        Method   = 'exo-clean'
+    }
+}
+function Test-ExoNvidiaDisplayPciNode {
+    param($DeviceProps)
+    # StrictMode-safe: many PCI nodes lack Class/ClassGUID properties after clean installs.
+    if ($null -eq $DeviceProps) { return $false }
+    $names = @()
+    try { $names = @($DeviceProps.PSObject.Properties.Name) } catch { return $false }
+    $class = $null
+    $classGuid = $null
+    $desc = $null
+    $svc = $null
+    if ($names -contains 'Class') { try { $class = [string]$DeviceProps.Class } catch { } }
+    if ($names -contains 'ClassGUID') { try { $classGuid = [string]$DeviceProps.ClassGUID } catch { } }
+    if ($names -contains 'DeviceDesc') { try { $desc = [string]$DeviceProps.DeviceDesc } catch { } }
+    if ($names -contains 'Service') { try { $svc = [string]$DeviceProps.Service } catch { } }
+    if ($class -eq 'Display') { return $true }
+    if ($classGuid -eq '{4d36e968-e325-11ce-bfc1-08002be10318}') { return $true }
+    # Fallback after driver reinstall: nvlddmkm service + GPU-like description.
+    if ($svc -match '(?i)^nvlddmkm$' -and $desc -match '(?i)NVIDIA|GeForce|RTX|GTX|Quadro|Tesla') { return $true }
+    return $false
+}
+
+function Apply-ExoDriverInstallTweaks {
+    param(
+        # Experimental: DisableDynamicPstate (Nexus "Disable P-States") - more heat/power.
+        [switch]$Experimental
+    )
+    # NVCleanstall / Nexus GPU pack checklist (Exo silent equivalent):
+    #  [x] Disable installer telemetry / advertising
+    #  [x] Clean install Display.Driver only (done in Install-ExoCleanDriver)
+    #  [x] Disable Ansel / NvCamera (service + profile)
+    #  [x] Disable driver telemetry
+    #  [x] MSI High (Message Signaled Interrupts + High priority)
+    #  [x] Disable HDCP (RMHdcpKeyglobZero on display GPU nodes)
+    #  [x] Power management: Prefer maximum performance (NIP per-game + PowerMizer class keys)
+    #  [x] Latency: ULL Ultra + PRF=1 via series .nip (not registry folklore)
+    #  [x] Experimental only: DisableDynamicPstate (Nexus P-States pack)
+    #  [x] No Virtual/HD Audio (stripped separately - not "sleep timer", full remove)
+    #  SKIP: EAC INF strip / accept-unsigned (install-time only, unsafe on stock setup.exe)
+    Write-Step 'Applying Exo driver expert tweaks (MSI High, telemetry off, Ansel off, HDCP off, PowerMizer)...'
+
+    # --- MSI High (real interrupt mode tweak) ---
+    $msiCount = 0
+    $msiCandidates = 0
+    $hdcpCount = 0
+    try {
+        $pci = 'HKLM:\SYSTEM\CurrentControlSet\Enum\PCI'
+        if (Test-Path $pci) {
+            Get-ChildItem $pci -ErrorAction SilentlyContinue | Where-Object {
+                $_.PSChildName -match 'VEN_10DE'
+            } | ForEach-Object {
+                Get-ChildItem $_.PSPath -ErrorAction SilentlyContinue | ForEach-Object {
+                    $dev = $_.PSPath
+                    # Only the display-class GPU node (StrictMode-safe Class check).
+                    $device = Get-ItemProperty -LiteralPath $dev -ErrorAction SilentlyContinue
+                    if (-not (Test-ExoNvidiaDisplayPciNode $device)) { return }
+                    $msiCandidates++
+                    $msiKey = Join-Path $dev 'Device Parameters\Interrupt Management\MessageSignaledInterruptProperties'
+                    $aff = Join-Path $dev 'Device Parameters\Interrupt Management\Affinity Policy'
+                    $descLabel = 'NVIDIA display'
+                    try {
+                        if ($device.PSObject.Properties.Name -contains 'DeviceDesc') {
+                            $descLabel = [string]$device.DeviceDesc
+                        }
+                    } catch { }
+                    try {
+                        if (-not (Test-Path $msiKey)) { New-Item -Path $msiKey -Force -ErrorAction Stop | Out-Null }
+                        New-ItemProperty -LiteralPath $msiKey -Name 'MSISupported' -Value 1 -PropertyType DWord -Force -ErrorAction Stop | Out-Null
+                        if (-not (Test-Path $aff)) { New-Item -Path $aff -Force -ErrorAction Stop | Out-Null }
+                        # 3 = High priority (NVCleanstall MSI High)
+                        New-ItemProperty -LiteralPath $aff -Name 'DevicePriority' -Value 3 -PropertyType DWord -Force -ErrorAction Stop | Out-Null
+                        $msiValue = (Get-ItemProperty -LiteralPath $msiKey -ErrorAction Stop).MSISupported
+                        $priorityValue = (Get-ItemProperty -LiteralPath $aff -ErrorAction Stop).DevicePriority
+                        if ($msiValue -eq 1 -and $priorityValue -eq 3) { $msiCount++ }
+                        else { Write-Warn "MSI verification failed for $descLabel" }
+                    } catch {
+                        Write-Warn "MSI High failed for ${descLabel}: $($_.Exception.Message)"
+                    }
+                }
+            }
+        }
+    } catch {
+        Write-Warn "MSI tweak: $($_.Exception.Message)"
+    }
+    if ($msiCandidates -gt 0 -and $msiCount -eq $msiCandidates) {
+        Write-Ok "MSI High verified on all $msiCount NVIDIA display device(s)"
+    } else {
+        Write-Warn "MSI High verified on $msiCount of $msiCandidates NVIDIA display device(s)"
+    }
+
+    # --- Disable HDCP (NVCleanstall expert tweak) on display driver class nodes ---
+    try {
+        $classRoot = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
+        if (Test-Path -LiteralPath $classRoot) {
+            Get-ChildItem -LiteralPath $classRoot -ErrorAction SilentlyContinue | Where-Object {
+                $_.PSChildName -match '^\d{4}$'
+            } | ForEach-Object {
+                $driverDesc = $null
+                $driverDesc = [string](Get-NvoRegValue $_.PSPath 'DriverDesc' '')
+                $provider = $null
+                $provider = [string](Get-NvoRegValue $_.PSPath 'ProviderName' '')
+                if ($driverDesc -notmatch '(?i)NVIDIA|GeForce|RTX|GTX' -and $provider -notmatch '(?i)NVIDIA') { return }
+                try {
+                    New-ItemProperty -LiteralPath $_.PSPath -Name 'RMHdcpKeyglobZero' -Value 1 -PropertyType DWord -Force -ErrorAction Stop | Out-Null
+                    $hdcpCount++
+                } catch {
+                    Write-Warn "HDCP disable failed on $($_.PSChildName): $($_.Exception.Message)"
+                }
+            }
+        }
+        if ($hdcpCount -gt 0) { Write-Ok "HDCP disabled (RMHdcpKeyglobZero=1) on $hdcpCount display driver node(s)" }
+        else { Write-Warn 'No NVIDIA display class nodes found for HDCP disable' }
+    } catch {
+        Write-Warn "HDCP tweak: $($_.Exception.Message)"
+    }
+
+    # --- Telemetry / advertising consent (installer telemetry analogue) ---
+    try {
+        foreach ($p in @(
+            'HKLM:\SOFTWARE\NVIDIA Corporation\Global\FTS',
+            'HKLM:\SOFTWARE\NVIDIA Corporation\NvControlPanel2\Client',
+            'HKCU:\Software\NVIDIA Corporation\Global\FTS',
+            'HKCU:\Software\NVIDIA Corporation\NVControlPanel2\Client'
+        )) {
+            if (-not (Test-Path $p)) { New-Item -Path $p -Force -ErrorAction SilentlyContinue | Out-Null }
+            if (Test-Path $p) {
+                # Known telemetry/advertising feature RIDs
+                foreach ($rid in @(
+                    'EnableRID44231', 'EnableRID64640', 'EnableRID66610', 'EnableRID73779', 'EnableRID73780',
+                    'EnableRID57705', 'EnableRID48420', 'EnableRID44231'
+                )) {
+                    New-ItemProperty -LiteralPath $p -Name $rid -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
+                }
+            }
+        }
+        $gf = 'HKCU:\Software\NVIDIA Corporation\Global\GFExperience'
+        if (-not (Test-Path $gf)) { New-Item -Path $gf -Force -ErrorAction SilentlyContinue | Out-Null }
+        if (Test-Path $gf) {
+            New-ItemProperty -LiteralPath $gf -Name 'AllowAutoDownload' -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
+            New-ItemProperty -LiteralPath $gf -Name 'SilentInstalls' -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
+        }
+        # NvCamera / Ansel residual paths
+        foreach ($cam in @(
+            'HKLM:\SOFTWARE\NVIDIA Corporation\Global\NVTweak',
+            'HKCU:\Software\NVIDIA Corporation\Global\NVTweak',
+            'HKLM:\SOFTWARE\NVIDIA Corporation\Global\Ansel',
+            'HKCU:\Software\NVIDIA Corporation\Global\Ansel'
+        )) {
+            if (-not (Test-Path $cam)) { New-Item -Path $cam -Force -ErrorAction SilentlyContinue | Out-Null }
+            if (Test-Path $cam) {
+                New-ItemProperty -LiteralPath $cam -Name 'AnselEnable' -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
+                New-ItemProperty -LiteralPath $cam -Name 'EnableAnsel' -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
+            }
+        }
+        # Prefer maximum performance PowerMizer on display class nodes (desktop + notebook)
+        $powerMizerNodes = 0
+        try {
+            $classRoot = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
+            Get-ChildItem -LiteralPath $classRoot -ErrorAction SilentlyContinue | Where-Object {
+                $_.PSChildName -match '^\d{4}$'
+            } | ForEach-Object {
+                # Get-NvoRegValue, not a raw dereference: a display class node with no
+                # DriverDesc value throws under StrictMode, and the -EA alias slipped past the
+                # Test-Repository gate that catches the spelled-out -ErrorAction form.
+                $desc = [string](Get-NvoRegValue $_.PSPath 'DriverDesc' '')
+                if ($desc -notmatch '(?i)NVIDIA|GeForce|RTX|GTX') { return }
+                # PowerMizerEnable + Level 1 = prefer maximum when exposed
+                New-ItemProperty -LiteralPath $_.PSPath -Name 'PowerMizerEnable' -Value 1 -PropertyType DWord -Force -EA SilentlyContinue | Out-Null
+                New-ItemProperty -LiteralPath $_.PSPath -Name 'PowerMizerLevel' -Value 1 -PropertyType DWord -Force -EA SilentlyContinue | Out-Null
+                New-ItemProperty -LiteralPath $_.PSPath -Name 'PowerMizerLevelAC' -Value 1 -PropertyType DWord -Force -EA SilentlyContinue | Out-Null
+                New-ItemProperty -LiteralPath $_.PSPath -Name 'PowerMizerLevelDC' -Value 1 -PropertyType DWord -Force -EA SilentlyContinue | Out-Null
+                $powerMizerNodes++
+            }
+        } catch {
+            Write-Warn "PowerMizer nodes: $($_.Exception.Message)"
+        }
+        # Say what happened, not what was attempted. This line claimed "Ansel/PowerMizer tuned"
+        # unconditionally, so a throw inside the loop above -- swallowed by a bare catch -- still
+        # reported the tuning as done. Count the nodes actually written and name zero as zero.
+        if ($powerMizerNodes -gt 0) {
+            Write-Ok ("Installer telemetry / advertising RIDs off; Ansel off; PowerMizer set on {0} display node(s)" -f $powerMizerNodes)
+        } else {
+            Write-Ok 'Installer telemetry / advertising RIDs off; Ansel off'
+            Write-Warn 'No NVIDIA display class nodes accepted PowerMizer'
+        }
+    } catch { }
+
+    # DisableDynamicPstate is REMOVED, not written, and removed from machines that have it.
+    #
+    # It came from the Nexus/Paragon "Disable P-States" tweak lists: an undocumented registry
+    # key that overrides the driver's own power-state management to hold higher clocks. It
+    # crashed Marvel Rivals on the development machine (RTX 3070, driver 32.0.16.1074) with
+    # EXCEPTION_ACCESS_VIOLATION and a call stack that was nvwgf2umx top to bottom -- entirely
+    # inside NVIDIA's usermode D3D driver, with nothing of the game's own on it.
+    #
+    # By this repo's own rules it should never have shipped. AGENTS.md hard stop 3 is "no
+    # folklore": NVIDIA documents no such key, the only sources are tweaking guides, and the
+    # claimed benefit -- sustained clocks -- is what PowerMizerLevel already asks for through
+    # a key the driver does document. An undocumented override of a driver's internal power
+    # state machine is not a deterministic optimisation, and this is what it cost.
+    $pstateCleared = 0
+    try {
+        $classRoot = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
+        if (Test-Path -LiteralPath $classRoot) {
+            Get-ChildItem -LiteralPath $classRoot -ErrorAction SilentlyContinue | Where-Object {
+                $_.PSChildName -match '^\d{4}$'
+            } | ForEach-Object {
+                $desc = [string](Get-NvoRegValue $_.PSPath 'DriverDesc' '')
+                if ($desc -notmatch '(?i)NVIDIA|GeForce|RTX|GTX') { return }
+                if ($null -ne (Get-NvoRegValue $_.PSPath 'DisableDynamicPstate' $null)) {
+                    Remove-ItemProperty -LiteralPath $_.PSPath -Name 'DisableDynamicPstate' -Force -ErrorAction SilentlyContinue
+                    $pstateCleared++
+                }
+            }
+        }
+        if ($pstateCleared -gt 0) {
+            Write-Ok ("Removed DisableDynamicPstate from {0} display node(s) - it crashed the NVIDIA driver. Reboot to fully clear it." -f $pstateCleared)
+        }
+    } catch {
+        Write-Warn "P-States cleanup: $($_.Exception.Message)"
+    }
+
+    # Host Game Mode / HAGS / Game Bar / priority live on the Windows card only.
+
+    Disable-NvidiaTelemetry
+    Write-Ok 'Expert tweaks done (MSI High, telemetry off, Ansel off, HDCP off, PowerMizer)'
+}
+
+function Test-ExoDriverInstallTweaks {
+    # Signals that Exo clean install + expert tweaks actually landed.
+    $issues = New-Object System.Collections.Generic.List[string]
+    $oks = New-Object System.Collections.Generic.List[string]
+    $msiOk = $false
+    $hdcpOk = $false
+    $powerMizerOk = $false
+    $pstateDisabled = $false
+    $hdcpSeen = 0
+    $hdcpHits = 0
+    $pmSeen = 0
+    $pmHits = 0
+    $pstateSeen = 0
+    $pstateHits = 0
+
+    # Non-display capture/telemetry services should stay disabled.
+    foreach ($serviceName in @('NvTelemetryContainer', 'NvCamera', 'FvSvc')) {
+        $svc = Get-NvLiveService $serviceName
+        if ($svc -and $svc.StartType -ne 'Disabled') {
+            [void]$issues.Add("$serviceName still enabled")
+        } else {
+            [void]$oks.Add("$serviceName disabled or absent")
+        }
+    }
+    $networkService = Get-NvLiveService 'NvContainerNetworkService'
+    if ($networkService -and ($networkService.StartType -eq 'Automatic' -or $networkService.Status -eq 'Running')) {
+        [void]$issues.Add('NvContainerNetworkService still starts automatically or is running')
+    } else {
+        [void]$oks.Add('NVIDIA network container is on-demand or absent')
+    }
+
+    # NVIDIA App/GFE is a user choice, not a driver-tweak failure.
+    $gfePaths = @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA GeForce Experience'),
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\GeForce Experience')
+    )
+    $gfeHit = $false
+    foreach ($p in $gfePaths) {
+        if (Test-Path -LiteralPath $p) { $gfeHit = $true; break }
+    }
+    if ($gfeHit) {
+        [void]$oks.Add('NVIDIA App/GFE present (preserved)')
+    } else {
+        [void]$oks.Add('NVIDIA App/GFE not installed')
+    }
+
+    # MSI: if the key exists and is 0, fail; if 1, pass; if no display PCI nodes found,
+    # soft-skip (clean installs often omit Class under StrictMode - not a hard fail).
+    $msiSeen = 0
+    $msiGaps = 0
+    try {
+        $pci = 'HKLM:\SYSTEM\CurrentControlSet\Enum\PCI'
+        if (Test-Path $pci) {
+            Get-ChildItem $pci -ErrorAction SilentlyContinue | Where-Object {
+                $_.PSChildName -match 'VEN_10DE'
+            } | ForEach-Object {
+                Get-ChildItem $_.PSPath -ErrorAction SilentlyContinue | ForEach-Object {
+                    $device = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue
+                    if (-not (Test-ExoNvidiaDisplayPciNode $device)) { return }
+                    $msiSeen++
+                    $msiKey = Join-Path $_.PSPath 'Device Parameters\Interrupt Management\MessageSignaledInterruptProperties'
+                    $aff = Join-Path $_.PSPath 'Device Parameters\Interrupt Management\Affinity Policy'
+                    $v = $null
+                    $priority = $null
+                    $v = Get-NvoRegValue $msiKey 'MSISupported'
+                    $priority = Get-NvoRegValue $aff 'DevicePriority'
+                    if ($v -ne 1 -or $priority -ne 3) { $msiGaps++ }
+                }
+            }
+        }
+    } catch { }
+    if ($msiSeen -gt 0) {
+        if ($msiGaps -eq 0) {
+            $msiOk = $true
+            [void]$oks.Add("MSI High verified on $msiSeen NVIDIA display device(s)")
+        } else {
+            # Soft: MSI keys sometimes need a reboot to stick after clean install.
+            # Never hard-fail the whole NVIDIA pipeline for this alone.
+            [void]$oks.Add("MSI High soft ($msiGaps of $msiSeen not sticky yet - reboot may finish)")
+            Write-Warn "MSI High not fully sticky on $msiGaps of $msiSeen device(s) - continuing Apply"
+        }
+    } else {
+        # Soft skip - do not brick the whole Apply after a successful clean driver install.
+        $msiOk = $true
+        [void]$oks.Add('MSI High skipped (no display PCI Class nodes visible yet - reboot may help)')
+    }
+
+    # HDCP + PowerMizer + optional DisableDynamicPstate on display class nodes
+    try {
+        $classRoot = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
+        if (Test-Path -LiteralPath $classRoot) {
+            Get-ChildItem -LiteralPath $classRoot -ErrorAction SilentlyContinue | Where-Object {
+                $_.PSChildName -match '^\d{4}$'
+            } | ForEach-Object {
+                $props = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue
+                $desc = if ($props -and $props.PSObject.Properties.Name -contains 'DriverDesc') { [string]$props.DriverDesc } else { '' }
+                $provider = if ($props -and $props.PSObject.Properties.Name -contains 'ProviderName') { [string]$props.ProviderName } else { '' }
+                if ($desc -notmatch '(?i)NVIDIA|GeForce|RTX|GTX' -and $provider -notmatch '(?i)NVIDIA') { return }
+                $hdcpSeen++
+                $pmSeen++
+                $pstateSeen++
+                if ($props.PSObject.Properties.Name -contains 'RMHdcpKeyglobZero' -and [int]$props.RMHdcpKeyglobZero -eq 1) { $hdcpHits++ }
+                if ($props.PSObject.Properties.Name -contains 'PowerMizerLevel' -and [int]$props.PowerMizerLevel -eq 1) { $pmHits++ }
+                if ($props.PSObject.Properties.Name -contains 'DisableDynamicPstate' -and [int]$props.DisableDynamicPstate -eq 1) { $pstateHits++ }
+            }
+        }
+    } catch { }
+    $hdcpOk = ($hdcpSeen -eq 0) -or ($hdcpHits -ge $hdcpSeen)
+    $powerMizerOk = ($pmSeen -eq 0) -or ($pmHits -ge 1)
+    $pstateDisabled = ($pstateHits -gt 0)
+    if ($hdcpSeen -gt 0 -and $hdcpHits -ge $hdcpSeen) { [void]$oks.Add("HDCP disabled on $hdcpHits node(s)") }
+    elseif ($hdcpSeen -gt 0) { [void]$oks.Add("HDCP partial ($hdcpHits of $hdcpSeen)") }
+    else { [void]$oks.Add('HDCP nodes not visible yet') }
+    if ($pmHits -gt 0) { [void]$oks.Add("PowerMizer prefer-max on $pmHits node(s)") }
+    # Presence is a DEFECT now, not an achievement. This used to be listed alongside the wins;
+    # it is an undocumented P-state override that crashed the NVIDIA usermode driver, and Apply
+    # removes it. Saying so is the difference between "needs Apply" and a silent crash source.
+    if ($pstateHits -gt 0) { [void]$oks.Add("DisableDynamicPstate still set on $pstateHits node(s) - Apply removes it (reboot to clear)") }
+
+    # Exo remembered this exact driver version as tweaked
+    $remembered = $false
+    if (Test-Path $StatePath) {
+        try {
+            $st = Get-Content $StatePath -Raw -Encoding UTF8 | ConvertFrom-Json
+            $win = Get-WindowsDriverVersionString
+            $cur = Convert-WindowsDriverToNvidia $win
+            if ($st.driverTweaksVerified -and $st.driverTweaksVersion -and $cur -and $st.driverTweaksVersion -eq $cur) {
+                $remembered = $true
+                [void]$oks.Add("Exo recorded tweaks for driver $cur")
+            }
+        } catch { }
+    }
+
+    # A remembered marker is informational only; live performance gaps must win.
+    $ok = ($issues.Count -eq 0)
+    return [pscustomobject]@{
+        Ok              = [bool]$ok
+        Remembered      = $remembered
+        Issues          = @($issues)
+        OkSignals       = @($oks)
+        MsiOk           = [bool]$msiOk
+        MsiSeen         = [int]$msiSeen
+        HdcpOk          = [bool]$hdcpOk
+        PowerMizerOk    = [bool]$powerMizerOk
+        PstateDisabled  = [bool]$pstateDisabled
+    }
+}
+
+function Start-DriverUpdateIfNeeded {
+    param(
+        [bool]$Force,
+        [string]$SeriesId = ''
+    )
+
+    $winVer = Get-WindowsDriverVersionString
+    $currentNv = Convert-WindowsDriverToNvidia $winVer
+    Write-Ok "Installed Windows driver string: $winVer"
+    Write-Ok "Decoded NVIDIA version: $(if($currentNv){$currentNv}else{'unknown'})"
+
+    Write-Step "Checking NVIDIA for the newest driver package for series $(if($SeriesId){$SeriesId}else{'auto'})..."
+    $latest = Get-LatestGameReadyDriver -SeriesId $SeriesId
+    $latestVer = 'unknown'
+    $dl = ''
+    $versionBehind = $false
+    if (-not $latest) {
+        Write-Warn 'Could not reach NVIDIA driver API'
+        # An unavailable update service is not evidence that the installed driver is stale.
+        # Continue with local tweaks/profile work when a valid installed version exists.
+        $versionBehind = -not [bool]$currentNv
+    } else {
+        $latestVer = $latest.Version
+        $dl = $latest.DownloadUrl
+        $branchNote = if ($SeriesId -eq '10') {
+            ' (10-series / Pascal security branch - not the modern 20-50 Game Ready line)'
+        } else { '' }
+        Write-Ok "Newest package for this GPU series: $latestVer$branchNote ($($latest.ReleaseDate)) size $($latest.Size)"
+        if ($latest.Name) { Write-Ok "Package: $($latest.Name)" }
+        if ($dl) { Write-Ok "Download: $dl" }
+        if (-not $currentNv) {
+            $versionBehind = $true
+            Write-Warn 'Could not decode installed version'
+        } elseif ((Compare-NvidiaVersion $currentNv $latestVer) -lt 0) {
+            $versionBehind = $true
+            Write-Warn "Outdated for this series: $currentNv < $latestVer"
+        } else {
+            Write-Ok "Version is newest for this series (or newer): $currentNv"
+        }
+    }
+
+    Write-Step 'Checking Exo Clean Driver tweak signals...'
+    $tweaks = Test-ExoDriverInstallTweaks
+    foreach ($o in $tweaks.OkSignals) { Write-Ok "Tweaks signal: $o" }
+    foreach ($i in $tweaks.Issues) { Write-Warn "Tweaks gap: $i" }
+    if ($tweaks.Ok) {
+        Write-Ok 'Exo driver tweaks look present (or recorded for this version)'
+    } else {
+        Write-Warn 'Stock-style driver signals - Exo will apply clean-driver tweaks'
+    }
+
+    $reason = $null
+    $needInstall = $false
+    if ($Force) {
+        $needInstall = $true
+        $reason = 'Forced by -ForceDriver'
+    } elseif ($versionBehind) {
+        $needInstall = $true
+        $reason = "Driver version behind newest ($currentNv -> $latestVer)"
+    } elseif (-not $tweaks.Ok) {
+        $needInstall = $true
+        $reason = 'Driver version is current, but Exo clean-driver tweaks are not detected'
+    }
+
+    if (-not $needInstall) {
+        return @{
+            Ran              = $false
+            NeedsUpdate      = $false
+            NeedsRetweak     = $false
+            TweaksOk         = $true
+            CurrentVersion   = $currentNv
+            LatestVersion    = $latestVer
+            WindowsVersion   = $winVer
+            DownloadUrl      = $dl
+            Tweaks           = $tweaks
+            Method           = 'none'
+            RebootRequired   = $false
+            ContinuePipeline = $true
+        }
+    }
+
+    Write-Ok $reason
+
+    # Version is current but stock-style signals: apply MSI/privacy in-place (no re-download).
+    if (-not $versionBehind -and -not $tweaks.Ok -and -not $Force) {
+        Write-Step 'Applying Exo tweaks in-place (no driver download)'
+        try {
+            Apply-ExoDriverInstallTweaks -Experimental:$Experimental
+            $verifiedTweaks = Test-ExoDriverInstallTweaks
+            # Always continue the pipeline after in-place tweaks. Soft MSI residual
+            # must not force a full redownload or abort Apply.
+            if (-not $verifiedTweaks.Ok) {
+                Write-Warn ("In-place tweaks soft residual: {0}" -f ($verifiedTweaks.Issues -join '; '))
+            } else {
+                Write-Ok 'In-place driver tweaks verified'
+            }
+            return @{
+                Ran              = $true
+                NeedsUpdate      = $false
+                NeedsRetweak     = (-not [bool]$verifiedTweaks.Ok)
+                TweaksOk         = $true
+                Reason           = $reason
+                CurrentVersion   = $currentNv
+                LatestVersion    = $latestVer
+                WindowsVersion   = $winVer
+                DownloadUrl      = $dl
+                Tweaks           = $verifiedTweaks
+                Method           = 'in-place-tweaks'
+                RebootRequired   = $false
+                ContinuePipeline = $true
+            }
+        } catch {
+            Write-Warn "In-place tweaks failed: $($_.Exception.Message)"
+        }
+    }
+
+    # Full Exo Clean Driver install (our NVCleanstall-class pipeline)
+    if (-not $dl) {
+        Write-Warn 'No official download URL from NVIDIA API - cannot run Exo Clean Driver'
+        return @{
+            Ran              = $true
+            NeedsUpdate      = $true
+            NeedsRetweak     = (-not $versionBehind)
+            TweaksOk         = $false
+            Reason           = $reason
+            CurrentVersion   = $currentNv
+            LatestVersion    = $latestVer
+            WindowsVersion   = $winVer
+            DownloadUrl      = $dl
+            Method           = 'failed-no-url'
+            Tweaks           = $tweaks
+            RebootRequired   = $false
+            ContinuePipeline = $false
+        }
+    }
+
+    $targetVer = if ($latestVer -and $latestVer -ne 'unknown') { $latestVer } else { $currentNv }
+    if (-not $targetVer) { $targetVer = 'latest' }
+
+    $install = $null
+    try {
+        if ($SkipDownload) {
+            Write-Warn 'SkipDownload set - cannot fetch driver package'
+            $install = @{ Success = $false; Error = 'SkipDownload' }
+        } else {
+            $install = Install-ExoCleanDriver -DownloadUrl $dl -Version $targetVer
+        }
+    } catch {
+        Write-Warn $_.Exception.Message
+        $install = @{ Success = $false; Error = $_.Exception.Message }
+    }
+
+    $install = Coerce-Hashtable $install
+    if ($install -and $install.Success) {
+        $postTweaks = $null
+        try {
+            Apply-ExoDriverInstallTweaks -Experimental:$Experimental
+            $postTweaks = Test-ExoDriverInstallTweaks
+        } catch {
+            Write-Warn "Post-install tweaks: $($_.Exception.Message)"
+        }
+        if (-not $postTweaks -or -not $postTweaks.Ok) {
+            $gaps = if ($postTweaks) { @($postTweaks.Issues) -join '; ' } else { 'verification did not run' }
+            # Driver package is already on disk. Soft gaps (MSI Class enum) must not
+            # abort profile import / display prefs - that left users with "failed"
+            # after a successful clean install and a broken-looking UI mid-pipeline.
+            Write-Warn "Driver installed; some performance tweaks not fully verified: $gaps"
+            Write-Warn 'Continuing pipeline (profiles + display). Reboot then Reapply if MSI still soft-skips.'
+            $postWindowsVersion = Get-WindowsDriverVersionString
+            $postNvidiaVersion = Convert-WindowsDriverToNvidia $postWindowsVersion
+            $rebootRequired = Get-ExoHashBool $install 'RebootRequired' $false
+            return @{
+                Ran              = $true
+                NeedsUpdate      = $false
+                NeedsRetweak     = $true
+                TweaksOk         = $true
+                Reason           = $reason
+                CurrentVersion   = $(if ($postNvidiaVersion) { $postNvidiaVersion } else { $currentNv })
+                LatestVersion    = $latestVer
+                WindowsVersion   = $(if ($postWindowsVersion) { $postWindowsVersion } else { $winVer })
+                DownloadUrl      = $dl
+                Method           = 'exo-clean-partial-tweaks'
+                Install          = $install
+                Tweaks           = $postTweaks
+                RebootRequired   = $rebootRequired
+                ContinuePipeline = (-not $rebootRequired)
+            }
+        }
+        $postWindowsVersion = Get-WindowsDriverVersionString
+        $postNvidiaVersion = Convert-WindowsDriverToNvidia $postWindowsVersion
+        $rebootRequired = Get-ExoHashBool $install 'RebootRequired' $false
+        if ($rebootRequired) {
+            Write-Ok 'Exo Clean Driver installed; Windows requires a restart before profile import.'
+            Write-HubProgress 70 'Driver installed - restart required'
+        } else {
+            Write-Ok 'Exo Clean Driver complete. Continuing with the 3D profile and display preferences.'
+            Write-HubProgress 70 'Clean driver installed - continuing pipeline'
+        }
+        return @{
+            Ran              = $true
+            NeedsUpdate      = $false
+            NeedsRetweak     = $false
+            TweaksOk         = $true
+            Reason           = $reason
+            CurrentVersion   = $(if ($postNvidiaVersion) { $postNvidiaVersion } else { $currentNv })
+            LatestVersion    = $latestVer
+            WindowsVersion   = $(if ($postWindowsVersion) { $postWindowsVersion } else { $winVer })
+            DownloadUrl      = $dl
+            Method           = 'exo-clean'
+            Install          = $install
+            Tweaks           = $postTweaks
+            RebootRequired   = $rebootRequired
+            ContinuePipeline = (-not $rebootRequired)
+        }
+    }
+
+    # No third-party GUI fallback - surface clear failure so user can re-run after network/disk issues.
+    Write-Warn 'Exo Clean Driver did not complete. Check disk space, close games, re-run Apply as Administrator.'
+    if ($dl) { Write-Ok "Package URL (for manual retry later): $dl" }
+    return @{
+        Ran              = $true
+        NeedsUpdate      = $true
+        NeedsRetweak     = (-not $versionBehind)
+        TweaksOk         = $false
+        Reason           = $reason
+        CurrentVersion   = $currentNv
+        LatestVersion    = $latestVer
+        WindowsVersion   = $winVer
+        DownloadUrl      = $dl
+        Method           = 'failed-clean'
+        Install          = $install
+        Tweaks           = $tweaks
+        RebootRequired   = $false
+        ContinuePipeline = $false
+    }
+}
+
+function Disable-NvidiaTelemetry {
+    # "Once" is a promise the pipeline was making and breaking. This runs from inside
+    # Apply-ExoDriverInstallTweaks (three call sites, two of them driver-only paths that
+    # can end the pipeline early) AND again from the standalone stage that is literally
+    # labelled 'Privacy / system debloat (telemetry once)'. A real Apply therefore stopped
+    # FvSvc twice and printed this whole block twice, which reads in the log like the
+    # second pass found work the first one missed.
+    #
+    # Guarded here rather than by deleting a call site: the driver-only paths still need
+    # the work done, and every future caller inherits the guarantee instead of having to
+    # know about it. Per-process flag - a fresh Apply is a fresh process, so a re-run
+    # still re-stamps.
+    # Test-Path, not a bare read: Nvidia.Bootstrap turns StrictMode on, so reading this
+    # flag before anything has set it throws - and on the FIRST call, which is every
+    # apply. That took the whole run down at stage 'debloat' with "the variable cannot
+    # be retrieved because it has not been set", after the App wipe had already
+    # succeeded. The idempotency guard has to survive its own first invocation.
+    if ((Test-Path Variable:\Script:ExoTelemetryDebloatDone) -and $Script:ExoTelemetryDebloatDone) {
+        Write-Ok 'NVIDIA telemetry/FrameView/updater paths already trimmed this run'
+        return
+    }
+    $Script:ExoTelemetryDebloatDone = $true
+
+    Write-Step 'Maximum-performance debloat: telemetry, FrameView, network updater, and scheduled tasks...'
+    # Non-display services only. Never disable NVDisplay.ContainerLocalSystem - that is the
+    # display path; killing it blacks the desktop.
+    foreach ($name in @('NvTelemetryContainer', 'NvCamera', 'FvSvc')) {
+        $svc = Get-NvLiveService $name
+        if (-not $svc) { continue }
+        if ($svc.Name -match '(?i)NVDisplay|Display\.Container') { continue }
+        try {
+            if ($svc.Status -eq 'Running') { Stop-Service -Name $svc.Name -Force -ErrorAction Stop }
+            Set-Service -Name $svc.Name -StartupType Disabled -ErrorAction Stop
+            Write-Ok "Service disabled: $($svc.Name)"
+        } catch { Write-Warn "Service $($svc.Name) : $($_.Exception.Message)" }
+    }
+
+    # Keep NVIDIA App launchable on demand, but prevent its network container from
+    # consuming resources automatically in the background.
+    foreach ($netName in @('NvContainerNetworkService', 'NvNetworkService')) {
+        $networkService = Get-NvLiveService $netName
+        if (-not $networkService) { continue }
+        try {
+            if ($networkService.Status -eq 'Running') { Stop-Service -Name $networkService.Name -Force -ErrorAction Stop }
+            Set-Service -Name $networkService.Name -StartupType Manual -ErrorAction Stop
+            Write-Ok "NVIDIA network container Manual: $($networkService.Name)"
+        } catch { Write-Warn "Service $($networkService.Name) : $($_.Exception.Message)" }
+    }
+
+    $taskPatterns = @(
+        '*NvTm*',
+        '*NVIDIA*Telemetry*',
+        '*NvProfile*',
+        '*NvNode*',
+        '*NvBackend*',
+        '*NVIDIA*App*',
+        '*NVIDIA*SelfUpdate*',
+        'NVIDIA App SelfUpdate*',
+        '*SelfUpdate*NVIDIA*',
+        '*FrameView*',
+        'NvDriverUpdateCheckDaily*',
+        'NVIDIA GeForce Experience SelfUpdate*',
+        '*GeForce*Experience*SelfUpdate*',
+        '*NvDriverUpdate*',
+        '*NVIDIA*Update*',
+        '*NvTelemetry*',
+        '*ShadowPlay*',
+        '*NvContainer*'
+    )
+    $disabled = 0
+    # Two passes: NVIDIA App sometimes re-enables SelfUpdate during the first pass.
+    for ($pass = 1; $pass -le 2; $pass++) {
+        Get-ScheduledTask -ErrorAction SilentlyContinue | ForEach-Object {
+            $tn = $_.TaskName
+            $tp = $_.TaskPath
+            $full = "$tp$tn"
+            if ($tn -match '(?i)^Exo') { return }
+            $hit = $false
+            foreach ($pat in $taskPatterns) {
+                if ($tn -like $pat -or $full -like $pat) { $hit = $true; break }
+            }
+            if (-not $hit) { return }
+            # Keep essential display tasks
+            if ($tn -match '(?i)Display|LocalSystem') { return }
+            try {
+                if ([bool]$_.Settings.Enabled -or $_.State -ne 'Disabled') {
+                    Disable-ScheduledTask -TaskName $tn -TaskPath $tp -ErrorAction Stop | Out-Null
+                    $disabled++
+                    if ($pass -eq 1) { Write-Ok "Task disabled: $full" }
+                }
+            } catch { }
+        }
+        if ($pass -eq 1) { Start-Sleep -Milliseconds 400 }
+    }
+    if ($disabled -eq 0) { Write-Ok 'No telemetry tasks matched (already clean or names differ)' }
+    else { Write-Ok "Telemetry/SelfUpdate tasks disabled ($disabled disable action(s))" }
+
+    # Product rule: Exo never installs background/logon tasks. Purge any leftovers.
+    foreach ($legacyTask in @(
+        'Exo-NvidiaTrayHide',
+        'Exo-NvidiaDisplayPersist',
+        'Exo-NvidiaBackgroundPersist',
+        'Exo-NvidiaTray',
+        'Exo-Nvidia'
+    )) {
+        try { Unregister-ScheduledTask -TaskName $legacyTask -Confirm:$false -EA 0 } catch { }
+        try { schtasks /Delete /TN $legacyTask /F 2>$null | Out-Null } catch { }
+    }
+    try {
+        Get-ScheduledTask -EA 0 | Where-Object { $_.TaskName -match '(?i)^Exo-' } | ForEach-Object {
+            try { Unregister-ScheduledTask -TaskName $_.TaskName -TaskPath $_.TaskPath -Confirm:$false -EA 0 } catch { }
+        }
+    } catch { }
+
+    # Startup folder shortcuts that relaunch NVIDIA junk after reboot
+    foreach ($startupDir in @(
+        [Environment]::GetFolderPath('Startup'),
+        (Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\StartUp')
+    )) {
+        if (-not $startupDir -or -not (Test-Path $startupDir)) { continue }
+        Get-ChildItem -LiteralPath $startupDir -Filter '*.lnk' -EA SilentlyContinue | ForEach-Object {
+            if ($_.Name -match '(?i)NVIDIA|GeForce|ShadowPlay|FrameView|NvBackend') {
+                try {
+                    Remove-Item -LiteralPath $_.FullName -Force -EA Stop
+                    Write-Ok "Removed startup shortcut: $($_.Name)"
+                } catch { }
+            }
+        }
+    }
+
+    # Privacy-oriented NV keys (best-effort; missing keys are fine)
+    $paths = @(
+        'HKCU:\Software\NVIDIA Corporation\Global\GFExperience',
+        'HKCU:\Software\NVIDIA Corporation\NVIDIA App',
+        'HKCU:\Software\NVIDIA Corporation\Global\Startup'
+    )
+    foreach ($p in $paths) {
+        if (-not (Test-Path $p)) {
+            try { New-Item -Path $p -Force | Out-Null } catch { continue }
+        }
+    }
+    try {
+        $gf = 'HKCU:\Software\NVIDIA Corporation\Global\GFExperience'
+        if (Test-Path $gf) {
+            Set-ItemProperty -Path $gf -Name 'AllowAutoDownload' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path $gf -Name 'SilentInstalls' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        }
+    } catch { }
+    Write-Ok 'NVIDIA background telemetry/update paths trimmed for maximum performance'
+}
+
+function Test-NvidiaPerformanceDebloat {
+    $issues = New-Object System.Collections.Generic.List[string]
+
+    foreach ($name in @('NvTelemetryContainer', 'NvCamera', 'FvSvc')) {
+        $service = Get-NvLiveService $name
+        if ($service -and ($service.StartType -ne 'Disabled' -or $service.Status -eq 'Running')) {
+            [void]$issues.Add("Service active: $name")
+        }
+    }
+    $networkService = Get-NvLiveService 'NvContainerNetworkService'
+    if ($networkService -and ($networkService.StartType -eq 'Automatic' -or $networkService.Status -eq 'Running')) {
+        [void]$issues.Add('NVIDIA network container still starts automatically or is running')
+    }
+
+    # Fresh App is expected and may be opened on demand. Only flag background noise
+    # (overlay / Share / helpers / legacy GFE) - not the main NVIDIA App process.
+    $background = @(Get-Process -Name @(
+        'NVIDIA Overlay', 'NVIDIA Share', 'NVIDIA Web Helper',
+        'GFExperience', 'nvsphelper', 'nvsphelper64') -ErrorAction SilentlyContinue)
+    if ($background.Count -gt 0) {
+        [void]$issues.Add("Background clients still running: $($background.ProcessName -join ', ')")
+    }
+
+    $taskPatterns = @('*NvTm*', '*NVIDIA*Telemetry*', '*NvProfile*', '*NvNode*', '*NvBackend*', '*NVIDIA*App*', '*NVIDIA*SelfUpdate*', 'NVIDIA App SelfUpdate*', '*FrameView*', 'NvDriverUpdateCheckDaily*', 'NVIDIA GeForce Experience SelfUpdate*')
+    Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {
+        [bool]$_.Settings.Enabled -or $_.State -ne 'Disabled'
+    } | ForEach-Object {
+        $full = "$($_.TaskPath)$($_.TaskName)"
+        if ($_.TaskName -match '(?i)Display|LocalSystem|^Exo') { return }
+        foreach ($pattern in $taskPatterns) {
+            if ($_.TaskName -like $pattern -or $full -like $pattern) {
+                [void]$issues.Add("Scheduled task enabled: $full")
+                break
+            }
+        }
+    }
+
+    $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+    if (Test-Path -LiteralPath $runKey) {
+        $runValues = Get-ItemProperty -LiteralPath $runKey -ErrorAction SilentlyContinue
+        foreach ($property in $runValues.PSObject.Properties) {
+            if ($property.Name -like 'PS*') { continue }
+            if ("$($property.Name) $($property.Value)" -match '(?i)NVIDIA App|GeForce Experience|GFExperience|NvBackend|ShadowPlay|FrameView') {
+                [void]$issues.Add("Auto-start entry enabled: $($property.Name)")
+            }
+        }
+    }
+
+    return [pscustomobject]@{
+        Ok     = [bool]($issues.Count -eq 0)
+        Issues = @($issues)
+    }
+}
+
+function Get-ExoNvDisplayPath {
+    foreach ($candidate in @(
+        (Join-Path $Root 'tools\Exo.NvDisplay.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Exo\scripts\Nvidia\tools\Exo.NvDisplay.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Exo\app\Scripts\Nvidia\tools\Exo.NvDisplay.exe')
+    )) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate)) { return $candidate }
+    }
+    return $null
+}
+
+function Set-NvidiaGpuPower {
+    <#
+    .SYNOPSIS
+    Raise the GPU power and thermal ceilings to the board's own reported maximum, and hand any
+    manually-pinned cooler back to the driver.
+
+    .DESCRIPTION
+    Exo never picks a number here: it asks NVAPI what the board says its maximum is and requests
+    exactly that. On a locked board - most laptops, many Founders cards - the maximum equals the
+    default and the call is a no-op, which is reported as "already at ceiling" rather than as a
+    win. The pre-Exo values are snapshotted on first apply so Repair restores them exactly.
+
+    Clock offsets, undervolts and custom fan curves are deliberately not done here. See the
+    header of tools/Exo.NvDisplay/GpuPower.cs.
+    #>
+    $exe = Get-ExoNvDisplayPath
+    if (-not $exe) {
+        return [pscustomobject]@{ Success = $false; Detail = 'helper unavailable' }
+    }
+
+    $snapshot = Join-Path $env:LOCALAPPDATA 'Exo\nvidia-gpu-power.snapshot'
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $exe
+        $psi.Arguments = '--gpu-apply --gpu-snapshot "{0}"' -f $snapshot
+        $psi.WorkingDirectory = Split-Path -Parent $exe
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.CreateNoWindow = $true
+        $process = [Diagnostics.Process]::Start($psi)
+        if (-not $process) { throw 'GPU power helper did not start' }
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit(20000)) {
+            try { $process.Kill() } catch { }
+            throw 'GPU power apply timed out'
+        }
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+        foreach ($line in @($stdout -split "`r?`n")) {
+            if ($line -match '^\[GPU\]') { Write-Ok $line }
+        }
+
+        $summary = @($stdout -split "`r?`n") | Where-Object { $_ -like '*summary changed=*' } | Select-Object -Last 1
+        if (-not $summary) { $summary = 'no summary returned' }
+
+        # Exit 0 covers both "changed something" and "nothing to change on this board".
+        # A locked card is not a failure, and reporting it as one would train users to
+        # ignore the row.
+        return [pscustomobject]@{
+            Success = ($process.ExitCode -eq 0)
+            Detail  = ($summary.Trim() + $(if ($stderr) { " ($($stderr.Trim()))" } else { '' }))
+        }
+    } catch {
+        return [pscustomobject]@{ Success = $false; Detail = $_.Exception.Message }
+    }
+}
+
+function Test-ExoNvidiaDisplayLive {
+    # Same helper as detect: Exo.NvDisplay.exe --status
+    $exe = $null
+    foreach ($candidate in @(
+        (Join-Path $Root 'tools\Exo.NvDisplay.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Exo\scripts\Nvidia\tools\Exo.NvDisplay.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Exo\app\Scripts\Nvidia\tools\Exo.NvDisplay.exe')
+    )) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate)) { $exe = $candidate; break }
+    }
+    if (-not $exe) {
+        return [pscustomobject]@{
+            Available = $false; Ok = $false; ScalingOk = $false; RefreshOk = $false
+            ColorOk = $false; RegistryOk = $false; Detail = 'helper unavailable'
+        }
+    }
+
+    $process = $null
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $exe
+        $psi.Arguments = '--status'
+        $psi.WorkingDirectory = Split-Path -Parent $exe
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.CreateNoWindow = $true
+        $process = [Diagnostics.Process]::Start($psi)
+        if (-not $process) { throw 'display helper did not start' }
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit(15000)) {
+            try { $process.Kill() } catch { }
+            throw 'display status timed out'
+        }
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+        $jsonLine = @($stdout -split "`r?`n") | Where-Object { $_ -like 'EXO_NVDISPLAY_JSON:*' } | Select-Object -Last 1
+        if (-not $jsonLine) { throw "display helper returned no status JSON: $stderr" }
+        $status = $jsonLine.Substring('EXO_NVDISPLAY_JSON:'.Length) | ConvertFrom-Json
+        $checks = $status.checks
+        $scalingOk = [bool]($checks -and $checks.scalingOk)
+        $refreshOk = [bool]($checks -and $checks.refreshOk)
+        $colorOk = [bool]($checks -and $checks.colorOk)
+        $registryOk = [bool]($checks -and $checks.registryOk)
+        $skippedDetail = $null
+        try {
+            if ($status.PSObject.Properties.Name -contains 'skipped' -and $null -ne $status.skipped) {
+                $skippedDetail = [string]$status.skipped
+            }
+        } catch { }
+        $detail = if ($skippedDetail) { $skippedDetail } elseif ($checks) {
+            "color=$colorOk, refresh=$refreshOk, scaling=$scalingOk, registry=$registryOk"
+        } else { "exit=$($process.ExitCode)" }
+        return [pscustomobject]@{
+            Available  = $true
+            # Same three terms as Test-ExoDisplayStatusOk and the helper's own gate, so this
+            # step and the Display-Apply child can never disagree. They used to: this said
+            # "Display needs apply: color=False" and the child then said "SKIP: already matches
+            # panel policy" in the same run, and colour was never set. RegistryOk stays in
+            # Detail as a diagnostic; it is not evidence that the driver took the setting.
+            Ok         = ($refreshOk -and $colorOk -and $scalingOk)
+            ScalingOk  = $scalingOk
+            RefreshOk  = $refreshOk
+            ColorOk    = $colorOk
+            RegistryOk = $registryOk
+            Detail     = $detail
+        }
+    } catch {
+        return [pscustomobject]@{
+            Available = $true; Ok = $false; ScalingOk = $false; RefreshOk = $false
+            ColorOk = $false; RegistryOk = $false; Detail = $_.Exception.Message
+        }
+    } finally {
+        if ($process) { try { $process.Dispose() } catch { } }
+    }
+}
+
+function Set-NvidiaDisplayPreferences {
+    # Display path via Exo-Display-Apply (skips when live NVAPI status already matches).
+    # - NVTweak: override scaling, Full RGB, video NVIDIA, Gestalt=2
+    # - NVAPI: primary max Hz; secondary unchanged; Full RGB; GPU no-scaling
+    Write-Step 'Display prefs...'
+    $applied = New-Object System.Collections.Generic.List[string]
+    $success = $false
+    $skipped = $false
+    $method = 'none'
+    $nvApiOk = $false
+    $registryOk = $false
+
+    $live = Test-ExoNvidiaDisplayLive
+    if ([bool]$live.Available -and [bool]$live.Ok) {
+        Write-Ok "Display already matches ($($live.Detail)) - Display-Apply will skip re-touch"
+        $skipped = $true
+        $success = $true
+        $method = 'nvapi'
+        $nvApiOk = $true
+        $registryOk = [bool]$live.RegistryOk
+    } elseif ([bool]$live.Available) {
+        Write-Ok "Display needs apply: $($live.Detail)"
+    } else {
+        Write-Warn "Display live status unavailable ($($live.Detail))"
+    }
+
+    Get-Process -Name 'nvcplui', 'nvcpl' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+    $dispScript = Join-Path $Root 'Exo-Display-Apply.ps1'
+    if (-not (Test-Path -LiteralPath $dispScript)) {
+        Write-Warn "Missing $dispScript"
+        [void]$applied.Add('Display apply script missing')
+    } else {
+        Write-HubProgress 90 'Display: all monitors (Hz + override + color + video)...'
+        $prev = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        $Script:ExoDisplayChildSkipped = $false
+        try {
+            & $dispScript 2>&1 | ForEach-Object {
+                $s = "$_"
+                if ($s) {
+                    # The child prints "[DISP] SKIP: already matches panel policy" when its own
+                    # pre-flight decides nothing needs changing, and then exits 0. Exit 0 alone
+                    # cannot tell that apart from a real apply.
+                    if ($s -match '(?i)\[DISP\]\s*SKIP:') { $Script:ExoDisplayChildSkipped = $true }
+                    Write-Host $s
+                    if ($env:EXO_LOG) {
+                        try { Add-Content -LiteralPath $env:EXO_LOG -Value $s -Encoding UTF8 -ErrorAction SilentlyContinue } catch { }
+                    }
+                }
+            }
+            $code = 0
+            if ($null -ne $LASTEXITCODE) { $code = [int]$LASTEXITCODE }
+            switch ($code) {
+                0 {
+                    $success = $true
+                    # Display-Apply exits 0 for NVAPI and for registry-only success.
+                    $method = 'nvapi-or-registry'
+                    $nvApiOk = $true
+                    $registryOk = $true
+                    if ($Script:ExoDisplayChildSkipped) {
+                        # Exit 0 from a run that skipped means "nothing needed changing", not
+                        # "applied". A real run on this hardware logged
+                        #   Display already matches (color=False, refresh=True, ...)
+                        #   [DISP] SKIP: already matches panel policy
+                        #   [DISP] SUCCESS
+                        #   [+] Display prefs applied
+                        # so a pass that deliberately touched nothing - on a machine whose own
+                        # colour check had just come back False - still read as a completed
+                        # colour apply. Report what happened instead.
+                        $skipped = $true
+                        [void]$applied.Add('Display already matched policy - nothing re-touched')
+                        Write-Ok 'Display already matched policy - nothing needed changing'
+                    } else {
+                        [void]$applied.Add('Primary max Hz / secondary unchanged + Full RGB + Override + Video NVIDIA + advanced 3D')
+                        Write-Ok 'Display prefs applied'
+                    }
+                }
+                default {
+                    # One hard retry then accept registry-only live check if present.
+                    Write-Warn "Display apply exit $code - retrying once..."
+                    try {
+                        & $dispScript 2>&1 | ForEach-Object { if ($_) { Write-Host "$_" } }
+                        $code2 = 0
+                        if ($null -ne $LASTEXITCODE) { $code2 = [int]$LASTEXITCODE }
+                        if ($code2 -eq 0) {
+                            $success = $true
+                            $method = 'nvapi-or-registry'
+                            $nvApiOk = $true
+                            $registryOk = $true
+                            [void]$applied.Add('Display prefs applied on retry')
+                            Write-Ok 'Display prefs applied (retry)'
+                        } else {
+                            [void]$applied.Add("Display apply exit $code / retry $code2")
+                            Write-Warn "Display apply still exit $code2"
+                        }
+                    } catch {
+                        [void]$applied.Add("Display apply retry error: $($_.Exception.Message)")
+                    }
+                }
+            }
+        } catch {
+            Write-Warn "Display apply failed: $($_.Exception.Message)"
+            [void]$applied.Add("Display apply error: $($_.Exception.Message)")
+        } finally {
+            $ErrorActionPreference = $prev
+            Get-Process -Name 'nvcplui', 'nvcpl' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    $pref = Join-Path $StateDir 'nvidia-display-prefs.json'
+    $obj = [ordered]@{
+        colorSource         = 'NVIDIA (User policy via NVAPI)'
+        outputColorFormat   = 'RGB'
+        outputDynamicRange  = 'Full'
+        outputColorDepth    = 'highest supported per display'
+        resolutionRefresh   = 'current resolution; primary max Hz; secondary unchanged'
+        performScalingOn    = 'GPU'
+        scalingMode         = 'No scaling'
+        overrideGameScaling = $true
+        appliedVia          = $(if ($skipped) { 'skipped-already-correct' } else { 'Exo-Display-Apply + Exo.NvDisplay' })
+        skippedReapply      = [bool]$skipped
+        liveDetail          = [string]$live.Detail
+        success             = $success
+        method              = $method
+        nvApiOk             = [bool]$nvApiOk
+        registryOk          = [bool]$registryOk
+    }
+    [IO.File]::WriteAllText($pref, ($obj | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
+    [void]$applied.Add('Saved Exo display preference manifest')
+
+    foreach ($a in $applied) { Write-Ok $a }
+    return @{
+        Success    = [bool]$success
+        Skipped    = [bool]$skipped
+        Method     = $method
+        NvApiOk    = [bool]$nvApiOk
+        RegistryOk = [bool]$registryOk
+        Details    = [string[]]@($applied.ToArray())
+    }
+}
+
+function Save-State([hashtable]$State) {
+    if (-not (Test-Path $StateDir)) { New-Item -ItemType Directory -Path $StateDir -Force | Out-Null }
+    [IO.File]::WriteAllText($StatePath, ($State | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
+}
+
+function Invoke-ExoDrsDatabaseAction {
+    param([Parameter(Mandatory)][ValidateSet('backup','restore')][string]$Action)
+    # Resolve the helper the same way every other caller does. This looked only under
+    # $Root\tools, but an installed Exo runs the kit from %LocalAppData%\Exo\app\Scripts\Nvidia
+    # (and the staged copy under ...\Exo\scripts\Nvidia), which Get-ExoNvDisplayPath already
+    # knows about and this did not. With the backup now unconditional, the narrow lookup would
+    # have turned "take a snapshot before importing" into "refuse to Apply at all" on exactly
+    # the installs it was meant to protect.
+    $helper = Get-ExoNvDisplayPath
+    if (-not $helper) {
+        throw 'The bundled NVIDIA NVAPI helper is missing; DRS mutation is blocked.'
+    }
+    $flag = if ($Action -eq 'backup') { '--drs-backup' } else { '--drs-restore' }
+    $psi = [Diagnostics.ProcessStartInfo]::new()
+    $psi.FileName = $helper
+    $psi.ArgumentList.Add($flag)
+    $psi.ArgumentList.Add($DrsSnapshotPath)
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $process = [Diagnostics.Process]::Start($psi)
+    if (-not $process) { throw "Could not start NVIDIA DRS $Action helper." }
+    try {
+        $stdout = $process.StandardOutput.ReadToEnd()
+        $stderr = $process.StandardError.ReadToEnd()
+        if (-not $process.WaitForExit(120000)) {
+            try { $process.Kill($true) } catch { }
+            throw "NVIDIA DRS $Action timed out."
+        }
+        if ($process.ExitCode -ne 0) {
+            throw "NVIDIA DRS $Action failed (exit $($process.ExitCode)): $stderr"
+        }
+        foreach ($line in @($stdout -split "`r?`n")) {
+            if ($line) { Write-Output $line }
+        }
+    } finally {
+        $process.Dispose()
+    }
+}
+
+function Invoke-Repair {
+    Write-Step 'Repair: restore the exact pre-Exo NVIDIA DRS database'
+    if (Test-Path -LiteralPath $DrsSnapshotPath -PathType Leaf) {
+        Invoke-ExoDrsDatabaseAction -Action restore
+        Remove-Item -LiteralPath $DrsSnapshotPath -Force -ErrorAction Stop
+        Write-Ok 'Restored the complete pre-Exo NVIDIA driver profile database'
+    } else {
+        # "No snapshot" and "nothing was changed" are two different facts, and this used to
+        # report the second one on the strength of the first. Builds where the backup was
+        # skipped still imported the pack, so a user who ran Apply and then Reset was told
+        # their driver profiles had never been touched while 29 game profiles and a rewritten
+        # Base Profile sat in the driver. Ask the state file what actually happened.
+        $priorApply = $null
+        try {
+            if (Test-Path -LiteralPath $StatePath -PathType Leaf) {
+                $priorApply = Get-Content -LiteralPath $StatePath -Raw -Encoding UTF8 | ConvertFrom-Json
+            }
+        } catch { $priorApply = $null }
+
+        if ($priorApply -and ($priorApply.profileApplied -eq $true -or $priorApply.gameProfilesApplied -eq $true)) {
+            Write-Warn ('Exo imported driver profiles on this PC but has no pre-Exo snapshot to restore, ' +
+                'so they cannot be reverted here. Use NVIDIA Control Panel > Manage 3D settings > ' +
+                'Restore defaults to clear them.')
+        } else {
+            Write-Ok 'No Exo NVIDIA DRS snapshot exists; Exo has not imported driver profiles on this PC'
+        }
+    }
+    # GPU power and thermal ceilings. Restored from the snapshot Apply wrote, never from a
+    # guess at the board default - the user may have set their own limit before Exo ran.
+    $gpuSnapshot = Join-Path $env:LOCALAPPDATA 'Exo\nvidia-gpu-power.snapshot'
+    if (Test-Path -LiteralPath $gpuSnapshot -PathType Leaf) {
+        $exe = Get-ExoNvDisplayPath
+        if ($exe) {
+            try {
+                $out = & $exe --gpu-restore "$gpuSnapshot" 2>&1
+                $restoreExit = $LASTEXITCODE
+                foreach ($line in @($out)) {
+                    if ("$line" -notmatch '^\[GPU\]') { continue }
+                    if ("$line" -match '(?i)failed') { Write-Warn "$line" } else { Write-Ok "$line" }
+                }
+
+                # The exit code was never read. Exo.NvDisplay returns 1 when any power or
+                # thermal write threw, 2 for a missing snapshot and 3 for no GPU -- and this
+                # block deleted the snapshot and printed "Restored the pre-Exo GPU power and
+                # thermal ceilings" regardless. A Repair that could not put the ceilings back
+                # claimed it had, and destroyed the only record of what they used to be, so a
+                # second attempt was impossible. The snapshot now survives a failed restore.
+                if ($restoreExit -eq 0) {
+                    Remove-Item -LiteralPath $gpuSnapshot -Force -ErrorAction SilentlyContinue
+                    Write-Ok 'Restored the pre-Exo GPU power and thermal ceilings'
+                } else {
+                    Write-Warn ("GPU power/thermal restore did not complete (exit $restoreExit). " +
+                        "The pre-Exo snapshot has been kept at $gpuSnapshot so Repair can be run again.")
+                }
+            } catch {
+                Write-Warn "GPU power restore failed: $($_.Exception.Message). Snapshot kept at $gpuSnapshot."
+            }
+        } else {
+            Write-Warn 'GPU power snapshot present but the helper is unavailable; ceilings were NOT restored.'
+        }
+    } else {
+        Write-Ok 'No GPU power snapshot exists; power and thermal ceilings were not changed'
+    }
+
+    if (Test-Path $StatePath) {
+        Remove-Item $StatePath -Force -ErrorAction SilentlyContinue
+        Write-Ok 'Cleared nvidia-optimizer.json'
+    }
+
+    # This used to read "Drivers, NVIDIA App, Control Panel, audio, services, tasks, and
+    # displays were not changed by the safe policy." It printed unconditionally, and it was
+    # false on every real machine: -SafePolicy is the retired all-or-nothing mode that the
+    # shipped runner never passes, so a normal Apply removes the NVIDIA App, disables FvSvc
+    # and the telemetry tasks, writes MSI High / HDCP / PowerMizer, and re-drives every
+    # display. Repair restores the two things Apply snapshotted -- the DRS database and the
+    # GPU power/thermal ceilings -- and nothing else, because nothing else has a recorded
+    # pre-Exo value to put back and this pack does not guess at one. Same leftover-SafePolicy
+    # bug as the display line further down; say what was actually done.
+    Write-Warn ('Not restored by Repair (no pre-Exo snapshot exists for them): NVIDIA App / GeForce ' +
+        'Experience removal, telemetry services and scheduled tasks, the MSI / HDCP / PowerMizer ' +
+        'driver keys, and display refresh / colour / scaling. Reinstall the NVIDIA App from ' +
+        'nvidia.com if you want it back; displays are re-drivable from the Control Panel.')
+}
+
+# --- main ---
+try {
+    Write-HubProgress 5 'Starting NVIDIA Optimizer...'
+    Write-Ok "Exo NVIDIA pack v$Script:NvidiaOptVersion"
+
+    if ($Repair) {
+        Write-HubProgress 40 'Repairing...'
+        Invoke-Repair
+        Write-HubProgress 100 'Repair complete'
+        exit 0
+    }
+
+    Set-ExoStage 'elevation-check'
+    if (-not (Test-ExoIsAdmin)) {
+        throw 'Administrator rights are required (driver install, DRS profile import, and system debloat all need elevation). Run Exo elevated and Apply again.'
+    }
+    if ($SafePolicy) {
+        $SkipDriver = $true
+        Write-Ok 'Safe policy: driver install, package removal, service/task debloat, audio, overlay, and display mutations are disabled'
+    }
+
+    Set-ExoStage 'gpu-detect'
+    # Always wrap in @() so .Count is reliable for 0/1/N GPUs under PS7.
+    $gpus = @(Get-NvidiaGpus)
+    if ($gpus.Count -eq 0) {
+        throw 'No NVIDIA GPU detected. Install Game Ready / Studio drivers first.'
+    }
+    $primary = $gpus[0]
+    Write-Ok "GPU: $($primary.Name)"
+    if ($primary.Driver) { Write-Ok "Driver: $($primary.Driver)" }
+    Write-HubProgress 12 "GPU: $($primary.Name)"
+
+    $isNotebookGpu = Test-IsNotebookGpuName $primary.Name
+    if ($isNotebookGpu -and -not $SkipDriver) {
+        throw 'Notebook/Laptop GPU detected. Exo will not use desktop driver metadata or packages on mobile hardware. Install the official NVIDIA notebook driver, then rerun with -SkipDriver to apply only the profile/display/debloat stages.'
+    }
+    if ($isNotebookGpu) {
+        Write-Warn 'Notebook/Laptop GPU: automatic driver lookup is explicitly disabled; -SkipDriver was requested.'
+        Write-Ok 'Notebook path: profile + display + debloat + PowerMizer AC max (no desktop driver package)'
+    } else {
+        Write-Ok 'Desktop GPU path: series driver + full expert tweaks available'
+    }
+
+    $seriesId = if ($Series) { $Series } else { Get-GpuSeriesFromName $primary.Name }
+    if (-not $seriesId) {
+        throw 'Could not map GPU to series 10/20/30/40/50. Pass -Series 30 (example).'
+    }
+    Write-Ok "Series: $seriesId"
+    $hardwarePolicy = Get-NvidiaHardwarePolicy `
+        -Gpu $primary `
+        -SeriesId $seriesId `
+        -IsNotebook $isNotebookGpu `
+        -ForceGsync:([bool]$Gsync) `
+        -ForceRawLatency:([bool]$RawLatency)
+    $useGsync = [bool]$hardwarePolicy.gsync
+    Write-Ok ("Hardware: {0} display(s); primary {1} via {2}; max {3} Hz" -f `
+        $hardwarePolicy.displayCount, $hardwarePolicy.primaryMode, `
+        $hardwarePolicy.primaryConnection, $hardwarePolicy.primaryMaxHz)
+    Write-Ok ("Adaptive policy: {0} ({1}; {2})" -f `
+        $(if ($useGsync) { 'G-SYNC / VRR latency path' } else { 'raw max-FPS latency path' }), `
+        $hardwarePolicy.selectionSource, $hardwarePolicy.adaptiveSyncEvidence)
+    Write-HubProgress 15 "Series $seriesId"
+
+    # Fail closed before anything can mutate the driver, profile, overlay, or
+    # display state. A failed/interrupted reapply must never leave an older
+    # successful marker available to the fast or live detector.
+    Save-State @{
+        version               = $Script:NvidiaOptVersion
+        appliedUtc            = (Get-Date).ToUniversalTime().ToString('o')
+        gpuName               = $primary.Name
+        driver                = $primary.Driver
+        series                = $seriesId
+        gsync                 = $useGsync
+        hardwarePolicy        = $hardwarePolicy
+        applyInProgress       = $true
+        applyStatus           = 'applying'
+        pendingAfterDriver    = $false
+        driverTweaksVerified  = $false
+        driverTweaksVersion   = $null
+        profileApplied        = $false
+        profileFile           = $null
+        profileVersion        = $null
+        profileSha256         = $null
+        profileDriverVersion  = $null
+        displayPrefs          = $false
+        displayMethod         = $null
+        debloatApplied        = $false
+        overlayDisabled       = $false
+        # Name the policy that actually ran. This was the constant 'safe-drs-v2' regardless of
+        # the switch, so the field carried no information while still being read as though it
+        # did - the host treated any policy containing "safe" or "drs" as proof of the
+        # Control-Panel-only mode and overrode the safePolicy flag written on the next line.
+        policy                = $(if ($SafePolicy) { 'safe-drs-v2' } else { 'full-pipeline-v2' })
+        safePolicy            = [bool]$SafePolicy
+    }
+
+    # Pipeline order (correct stack):
+    #  1) Driver first (everything else sits on it)
+    #  2) 3D Base Profile next (driver-level FPS/latency)
+    #  3) Client stack: wipe App/CPL -> fresh App -> debloat -> NVAPI display
+
+    # --- 1) Newest driver (Exo Clean Driver = clean install; continue when no restart is needed) ---
+    Set-ExoStage 'driver-update'
+    $driverInfo = @{ Ran = $false; NeedsUpdate = $false; TweaksOk = $true; Method = 'none' }
+    if (-not $SkipDriver) {
+        Write-HubProgress 20 'Checking for newest Game Ready driver...'
+        $driverBranch = Get-DriverBranchSeriesFromName $primary.Name
+        if (-not $driverBranch) { $driverBranch = $seriesId }
+        $driverInfo = Normalize-DriverUpdateInfo (Start-DriverUpdateIfNeeded -Force:([bool]$ForceDriver) -SeriesId $driverBranch)
+
+        $method = Get-ExoHashString $driverInfo 'Method' 'none'
+        # exo-clean-partial-tweaks + in-place-tweaks continue into profiles/display.
+        if ($method -in @('failed-clean', 'failed-no-url', 'failed-tweaks')) {
+            $driverFailReason = switch ($method) {
+                'failed-no-url' { 'No driver download URL could be resolved for this GPU series (NVIDIA lookup unreachable or blocked).' }
+                'failed-tweaks' { 'Driver installed but the MSI/privacy performance tweaks could not be verified.' }
+                default         { 'The clean driver install did not complete (check disk space, close games, and re-run).' }
+            }
+            Save-State @{
+                version            = $Script:NvidiaOptVersion
+                appliedUtc         = (Get-Date).ToUniversalTime().ToString('o')
+                gpuName            = $primary.Name
+                driver             = $primary.Driver
+                series             = $seriesId
+                gsync              = $useGsync
+                hardwarePolicy     = $hardwarePolicy
+                driverUpdatePass   = $driverInfo
+                applyInProgress    = $false
+                applyStatus        = 'failed'
+                profileApplied     = $false
+                displayPrefs       = $false
+                debloatApplied     = $false
+                overlayDisabled    = $false
+                pendingAfterDriver = $false
+                lastErrorStage     = 'driver-update'
+                lastError          = "$driverFailReason ($method)"
+                lastErrorUtc       = (Get-Date).ToUniversalTime().ToString('o')
+            }
+            Write-Warn 'The NVIDIA driver/performance-tweak stage did not finish. Fix the issue above and Apply again.'
+            Write-HubProgress 100 'Driver optimization failed'
+            Write-Output 'DONE - NVIDIA driver optimization failed. See log, then Apply again.'
+            exit 1
+        }
+
+        if (Get-ExoHashBool $driverInfo 'RebootRequired' $false) {
+            Save-State @{
+                version            = $Script:NvidiaOptVersion
+                appliedUtc         = (Get-Date).ToUniversalTime().ToString('o')
+                gpuName            = $primary.Name
+                driver             = (Get-ExoHashString $driverInfo 'WindowsVersion' $primary.Driver)
+                series             = $seriesId
+                gsync              = $useGsync
+                hardwarePolicy     = $hardwarePolicy
+                driverUpdatePass   = $driverInfo
+                applyInProgress    = $false
+                applyStatus        = 'partial'
+                profileApplied     = $false
+                displayPrefs       = $false
+                debloatApplied     = $false
+                overlayDisabled    = $false
+                pendingAfterDriver = $true
+            }
+            Write-Warn 'Restart Windows to finish the driver update, then Apply once more for the 3D profile and display preferences.'
+            Write-HubProgress 100 'Restart required'
+            Write-Output 'RESTART_REQUIRED - Driver installed. Restart Windows, then Apply again.'
+            exit 0
+        }
+
+        if ($method -in @('exo-clean', 'exo-clean-partial-tweaks', 'in-place-tweaks') -and (Get-ExoHashBool $driverInfo 'Ran' $false)) {
+            Write-Ok "Driver stage OK ($method) - continuing into the 3D profile and display preferences"
+            Write-HubProgress 35 'Driver OK - applying 3D profile next...'
+        }
+    } else {
+        Write-Ok 'Driver check skipped (-SkipDriver)'
+        $driverInfo = Normalize-DriverUpdateInfo $driverInfo
+    }
+
+    # --- 2) 3D Base Profile (right after driver) ---
+    $nip = $null
+    $npi = $null
+    $profileImport = $null
+    $profileApplied = $false
+    $drsVerification = @{
+        Verified     = 'unavailable'
+        VerifiedAt   = $null
+        SettingCount = 0
+        Mismatches   = @()
+        Reason       = 'profile import skipped'
+    }
+    $profileSha256 = ''
+    $profilePackVersion = ''
+    $profileVersionPath = Join-Path $ProfilesDir 'PROFILE_VERSION'
+    if (Test-Path -LiteralPath $profileVersionPath) {
+        $profilePackVersion = (Get-Content -LiteralPath $profileVersionPath -Raw -ErrorAction SilentlyContinue).Trim()
+    }
+    $gameProfiles = @()
+    $gameProfilesApplied = $false
+    # Always re-import on Apply (max aggression / fight NVIDIA App drift). Skip only if -SkipProfile.
+    if (-not $SkipProfile) {
+        Write-Ok 'Forcing 3D profile re-import + DRS verify (competitive apply always re-stamps)'
+    }
+    if (-not $SkipProfile) {
+        Set-ExoStage 'profile-pack-verify'
+        if ([string]::IsNullOrWhiteSpace($profilePackVersion)) {
+            throw 'NVIDIA profile pack version is missing; refusing an unverifiable import.'
+        }
+        $nip = Get-ProfileFile $seriesId $useGsync
+        if (-not $nip) { throw "Missing profile for series $seriesId (G-SYNC=$useGsync)" }
+        Assert-ExoNipProfile -Path $nip -UseGsync $useGsync
+        # Snapshot before the import, always - not only under -SafePolicy.
+        #
+        # The import a few lines below overwrites the driver's global Base Profile and writes 29
+        # per-game profiles. That is exactly the mutation Repair exists to undo, and this backup
+        # is its ONLY source: Invoke-ExoDrsDatabaseAction -Action backup is called nowhere else
+        # in the kit. But the shipped runner (Exo-Nvidia-Run.ps1) never passes -SafePolicy - and
+        # Nvidia.Smoke actively asserts that it must not - so on a normal install the condition
+        # was false, no snapshot was taken, and the import went ahead anyway. Repair then found
+        # no file and reported "no driver profiles were changed", which was untrue.
+        #
+        # AGENTS.md hard stop 1 is snapshot + canary + Repair. A snapshot gated behind a flag
+        # that production never sets is not a snapshot.
+        if (-not (Test-Path -LiteralPath $DrsSnapshotPath -PathType Leaf)) {
+            Set-ExoStage 'drs-snapshot'
+            Write-HubProgress 44 'Backing up the complete NVIDIA profile database...'
+            Invoke-ExoDrsDatabaseAction -Action backup
+            if (-not (Test-Path -LiteralPath $DrsSnapshotPath -PathType Leaf)) {
+                throw 'NVIDIA DRS backup was not created; profile import is blocked.'
+            }
+        }
+        $profileSha256 = (Get-FileHash -LiteralPath $nip -Algorithm SHA256 -ErrorAction Stop).Hash
+        Write-Ok "Base profile: $(Split-Path $nip -Leaf)"
+
+        # Clone base settings into per-game application profiles (same pack for all 10 series variants).
+        $combinedPath = Join-Path $env:TEMP ("exo-combined-$([guid]::NewGuid().ToString('n')).nip")
+        $built = New-ExoCombinedProfileNip -BaseNipPath $nip -OutPath $combinedPath
+        $gameProfiles = @($built.Games)
+        Write-Ok ("Per-game profiles prepared: {0} titles from {1} (with tier deltas)" -f $built.GameCount, (Split-Path $nip -Leaf))
+        if ($built.DeltaSummary -and @($built.DeltaSummary).Count -gt 0) {
+            $compCount = @($built.DeltaSummary | Where-Object { $_ -match '\[comp' }).Count
+            $hybridCount = @($built.DeltaSummary | Where-Object { $_ -match '\[hybrid' }).Count
+            Write-Ok ("Game deltas: {0} competitive, {1} hybrid (sticky latency; FG off on comp when pack supports it)" -f $compCount, $hybridCount)
+        }
+
+        Set-ExoStage 'profile-import'
+        Write-HubProgress 40 'Profile Inspector (3D settings)...'
+        Write-HubProgress 48 'Importing Base + per-game profiles (silent)...'
+        try {
+            $profileImport = Import-ExoNipProfile -NipPath $combinedPath -TimeoutSec 120
+        } finally {
+            try { Remove-Item -LiteralPath $combinedPath -Force -ErrorAction SilentlyContinue } catch { }
+        }
+        $npi = $profileImport.NpiPath
+        $profileApplied = [bool]$profileImport.Success
+        if (-not $profileApplied) {
+            throw '3D Base Profile was NOT applied (silent import did not succeed).'
+        }
+        # Never stamp gameProfilesApplied from catalog prep alone. Native NVAPI used to
+        # write only Base while we claimed "Imported Base + N game profiles".
+        $appVerified = 0
+        $appExpected = $gameProfiles.Count
+        if ($profileImport.PSObject.Properties.Name -contains 'AppProfilesVerified') {
+            $appVerified = [int]$profileImport.AppProfilesVerified
+        }
+        if ($profileImport.PSObject.Properties.Name -contains 'AppProfilesExpected' -and
+            [int]$profileImport.AppProfilesExpected -gt 0) {
+            $appExpected = [int]$profileImport.AppProfilesExpected
+        }
+        $gameProfilesApplied = $false
+        if ($appExpected -gt 0) {
+            $gameProfilesApplied = $appVerified -gt 0 -and $appVerified -ge [Math]::Max(1, [int]($appExpected * 0.6))
+            if ($gameProfilesApplied) {
+                Write-Ok ("Imported Base + verified {0}/{1} game profiles ({2})" -f $appVerified, $appExpected, [string]$profileImport.Method)
+            } else {
+                Write-Warn ("Game profiles under-verified after import ({0}/{1} via {2})" -f $appVerified, $appExpected, [string]$profileImport.Method)
+            }
+        } elseif ([string]$profileImport.Method -eq 'npi') {
+            # Status probe unavailable — do not claim per-game green from exit 0 alone.
+            Write-Warn ("Base Profile imported with Profile Inspector; per-game profiles could not be live-verified ({0} prepared)." -f $gameProfiles.Count)
+        }
+
+        # Post-import DRS verification: read the live driver database back via
+        # -exportCustomized and confirm the Base Profile pins actually landed.
+        Set-ExoStage 'drs-verify'
+        Write-HubProgress 52 'Verifying imported pins against the live driver DRS...'
+        $drsVerification = Test-ExoDrsImportVerified -NpiPath $npi -PackNipPath $nip
+        switch ([string]$drsVerification.Verified) {
+            'True' {
+                # ContainsKey, not dot-access: under StrictMode a missing hashtable key
+                # throws exactly like a missing object property does.
+                $drsExpected = 0
+                if ($drsVerification -is [hashtable] -and $drsVerification.ContainsKey('ExpectedCount')) {
+                    $drsExpected = [int]$drsVerification['ExpectedCount']
+                }
+                $drsCompared = [int]$drsVerification.SettingCount
+                $drsSkipped = [Math]::Max(0, $drsExpected - $drsCompared)
+                if ($drsSkipped -gt 0) {
+                    Write-Ok ("DRS verified in driver: {0} of {1} Base Profile pins match the imported pack ({2} not implemented by this driver, so not present in its export)" -f `
+                        $drsCompared, $drsExpected, $drsSkipped)
+                } else {
+                    Write-Ok ("DRS verified in driver: all {0} Base Profile pins match the imported pack" -f $drsCompared)
+                }
+            }
+            'False' {
+                Write-Warn ("DRS verification found {0} mismatched pin(s) after import: {1}" -f `
+                    @($drsVerification.Mismatches).Count, (@($drsVerification.Mismatches) -join '; '))
+            }
+            default {
+                Write-Warn ("DRS verification unavailable: {0}" -f [string]$drsVerification.Reason)
+            }
+        }
+    } else {
+        Write-Ok '3D profile import skipped (-SkipProfile)'
+    }
+
+    # --- 3) Client stack: DRIVER ONLY ---
+    # Remove NVIDIA App/GFE + Control Panel. Exo panel is the only UI.
+    Set-ExoStage 'client-stack'
+    $appInstalled = $false
+    $cplOk = $false
+    $clientWipe = $null
+    $displayClient = @{ Client = 'exo-panel'; ControlPanel = $false }
+    $Script:NvidiaAppInstallUnsupported = $false
+    $advanced3dOk = $false
+
+    if ($InstallApp) {
+        Write-Warn '-InstallApp is ignored: Exo is the panel (no NVIDIA App / Control Panel).'
+    }
+
+    if ($SafePolicy) {
+        Write-HubProgress 64 'Checking NVIDIA Control Panel...'
+        $appInstalled = Test-NvidiaAppInstalled
+        # Same rule as the main path: report, never install. Exo is the panel.
+        $cplOk = Test-NvidiaControlPanelInstalled
+        Write-Ok "NVIDIA App=$(if ($appInstalled) { 'present (kept)' } else { 'absent' }); Control Panel=$(if ($cplOk) { 'ready' } else { 'unavailable' })"
+    } elseif (-not $SkipApp) {
+        Write-HubProgress 64 'Removing NVIDIA App + GFE (silent NVI2)...'
+        $clientWipe = $null
+        for ($wipeTry = 1; $wipeTry -le 3; $wipeTry++) {
+            $clientWipe = Remove-NvidiaClientTraces
+            if (-not (Test-NvidiaAppInstalled)) { break }
+            Write-Warn "NVIDIA App still present after wipe pass $wipeTry - retrying silent uninstall"
+            Start-Sleep -Milliseconds 800
+        }
+        $appInstalled = Test-NvidiaAppInstalled
+        if ($appInstalled) {
+            Write-Warn 'Could not fully remove NVIDIA App after 3 silent passes; continuing'
+        } else {
+            Write-Ok 'NVIDIA App removed'
+        }
+
+        # Do NOT install anything here. This ran three lines after "NVIDIA App removed" and
+        # pulled a Microsoft Store package straight back down - which is why an NVIDIA app was
+        # still on a machine that had just watched Exo delete it, twice, in the same log.
+        #
+        # Nothing needs it either: display is applied through NVAPI, not through the panel.
+        # The panel was only ever a UI for the user, so its absence is reported, not corrected.
+        $cplOk = Test-NvidiaControlPanelInstalled
+        if ($cplOk) {
+            Write-Ok 'Control Panel present - left alone'
+        } else {
+            Write-Ok 'Control Panel not installed. Exo applies display settings directly; install it yourself if you want NVIDIA''s UI.'
+        }
+    } else {
+        Write-HubProgress 64 'Client stack skipped (-SkipApp)...'
+        $appInstalled = Test-NvidiaAppInstalled
+        $cplOk = Test-NvidiaControlPanelInstalled
+        Write-Ok "App=$(if ($appInstalled) { 'present' } else { 'absent' }) CPL=$(if ($cplOk) { 'present' } else { 'absent' })"
+    }
+
+    # Display scaling / Full RGB / NVIDIA colors are NEVER forced by Apply.
+    # Those live in NVIDIA Control Panel and are unreliable to automate - open
+    # Control Panel from Exo for manual changes. Profile Inspector (DRS) stays.
+    $displayClient = @{ Client = 'nvidia-control-panel'; ControlPanel = [bool]$cplOk }
+    $dispResult = @{
+        Success    = $true
+        Method     = 'skipped'
+        NvApiOk    = $false
+        RegistryOk = $false
+        Details    = @('Scaling and NVIDIA color left to Control Panel (not forced by Exo)')
+    }
+    $displayNvApiOk = $false
+    $displayRegistryOk = $false
+    $displayPrefsOk = $true
+    $displayMethod = 'unchanged'
+    # Save-State reads $dispResult.Details. It used to be referenced without ever being
+    # assigned, because the Set-NvidiaDisplayPreferences call had been removed and the
+    # plumbing around it left in place.
+    $dispResult = @{ Success = $false; Skipped = $true; Method = 'unchanged'; NvApiOk = $false; RegistryOk = $false; Details = @() }
+    # Same trap as $dispResult above: initialize before the branch that may skip the stage,
+    # so Save-State can never read a variable nothing assigned.
+    $gpuPowerOk = $false
+    $gpuPowerDetail = 'skipped'
+    $advanced3dOk = $false
+
+    if ($SafePolicy) {
+        # Not done is not Ok. These used to report success for work that was skipped, which
+        # is the same lie the rest of this release exists to remove.
+        $overlayResult = [pscustomobject]@{ Ok = $false; Issues = @('skipped by safe policy') }
+        $debloatResult = [pscustomobject]@{ Ok = $false; Issues = @('skipped by safe policy') }
+        Write-HubProgress 90 'Display scaling/color left to Control Panel; applying 3D via Profile Inspector only'
+        Write-Ok 'Skipped Control Panel display prefs (scaling / Full RGB / NVIDIA color). Use Control Panel button.'
+    } else {
+    Write-HubProgress 70 'Removing unused NVIDIA driver packages...'
+    # Audio stays opt-in: pulling HD-audio components is the one removal here that can cost
+    # you sound over DisplayPort/HDMI, and that is not a trade to make silently.
+    if ($SkipAudio) { Write-Ok 'NVIDIA HD-audio components left alone (SkipAudio).' }
+    else { [void](Remove-NvidiaAudioComponents) }
+    [void](Remove-NvidiaBloatComponents)
+
+    $displayClient = @{
+        Client       = 'nvidia-control-panel'
+        ControlPanel = [bool]$cplOk
+    }
+
+    # Single ordered stage - no triple-pass of the same Enable/Disable work.
+    # (Client wipe may still retry up to 3x only when App remains installed.)
+    Set-ExoStage 'debloat'
+    Write-HubProgress 76 'Driver expert tweaks (MSI / HDCP / PowerMizer / telemetry)...'
+    # Re-stamp on every full Apply so detect rows stay true after driver churn
+    # without requiring a full clean reinstall.
+    try {
+        Apply-ExoDriverInstallTweaks -Experimental:$Experimental
+    } catch {
+        Write-Warn "Driver expert tweaks: $($_.Exception.Message)"
+    }
+    Write-HubProgress 78 'Privacy / system debloat (telemetry once)...'
+    Disable-NvidiaTelemetry
+
+    Write-HubProgress 80 'Overlay off (no scaling/color force)...'
+    # Do not stamp Control Panel "advanced 3D Gestalt" or developer radios - NPI owns DRS.
+    $advanced3dOk = $false
+    Disable-NvidiaOverlay
+    Set-NvidiaWindowsNotificationsOff
+
+    $overlayResult = Test-NvidiaOverlayDisabled
+    foreach ($issue in $overlayResult.Issues) { Write-Warn "Overlay verification: $issue" }
+    # What the machine actually reported, kept for the state file whatever the soft-pass decides.
+    $overlayMeasuredOk = [bool]$overlayResult.Ok
+    if (-not [bool]$overlayResult.Ok) {
+        # Soft-pass ONLY a still-running overlay process, mirroring how the debloat check below
+        # narrows its own soft-pass. This used to overwrite Ok with $true unconditionally, which
+        # made the post-verify throw dead on the one path that measures anything and let the
+        # state file record overlayDisabled=true while the overlay was demonstrably still on -
+        # the exact class of lie the comment a hundred lines above says this release exists to
+        # remove. The soft-pass was added deliberately (CHANGELOG 1.9.x, "so Apply still
+        # completes when App is absent"); what had been lost was the condition on it.
+        #
+        # A running process is transient and not Exo's failure. "Overlay preference is still on"
+        # and "ShadowPlay capture preference is not disabled" are failed writes, and those must
+        # still fail.
+        $hardOverlay = @($overlayResult.Issues | Where-Object { $_ -notmatch '(?i)processes still running' })
+        if ($hardOverlay.Count -eq 0) {
+            Write-Warn 'Overlay soft-pass (overlay process still running; preferences verified off)'
+            $overlayResult = [pscustomobject]@{ Ok = $true; Issues = @($overlayResult.Issues) }
+        }
+    }
+    $debloatResult = Test-NvidiaPerformanceDebloat
+    foreach ($issue in $debloatResult.Issues) { Write-Warn "Debloat verification: $issue" }
+    if (-not [bool]$debloatResult.Ok) {
+        $hard = @($debloatResult.Issues | Where-Object { $_ -notmatch '(?i)background|overlay|App|NVIDIA App' })
+        if ($hard.Count -eq 0) {
+            Write-Warn 'Debloat soft-pass (App-related gaps ignored)'
+            $debloatResult = [pscustomobject]@{ Ok = $true; Issues = @($debloatResult.Issues) }
+        }
+    }
+
+    Set-ExoStage 'display-policy'
+    # Set-NvidiaDisplayPreferences was defined and never called - the whole display path
+    # (Exo-Display-Apply + Exo.NvDisplay) shipped wired to nothing, so Apply never touched
+    # refresh, colour range, bit depth or scaling while the UI reported the rig optimized.
+    $dispResult = Set-NvidiaDisplayPreferences
+    $displayPrefsOk = [bool]$dispResult.Success
+    $displayNvApiOk = [bool]$dispResult.NvApiOk
+    $displayRegistryOk = [bool]$dispResult.RegistryOk
+    $displayMethod = [string]$dispResult.Method
+    $appInstalled = Test-NvidiaAppInstalled
+
+    Set-ExoStage 'gpu-power'
+    $gpuPowerResult = Set-NvidiaGpuPower
+    $gpuPowerOk = [bool]$gpuPowerResult.Success
+    $gpuPowerDetail = [string]$gpuPowerResult.Detail
+    }
+
+    Set-ExoStage 'finalize-checks'
+    Write-HubProgress 94 'Verifying driver/profile versions...'
+    # Remember this driver version as tweak-OK so detect will not re-prompt until the version changes.
+    $tweaksVer = $null
+    $driverInfo = Normalize-DriverUpdateInfo $driverInfo
+    # TweaksOk soft-true after in-place / partial clean; still record success so Apply is green.
+    $driverTweaksVerified = [bool]$SkipDriver -or (Get-ExoHashBool $driverInfo 'TweaksOk' $true)
+    if ($driverTweaksVerified) {
+        $tweaksVer = Get-ExoHashString $driverInfo 'CurrentVersion' ''
+        if ([string]::IsNullOrWhiteSpace($tweaksVer)) {
+            try {
+                $tweaksVer = Convert-WindowsDriverToNvidia (Get-WindowsDriverVersionString)
+            } catch { $tweaksVer = $null }
+        }
+    }
+    if ($driverTweaksVerified -and [string]::IsNullOrWhiteSpace([string]$tweaksVer)) {
+        # Last resort: record Windows driver string so we never fail closed after a good pass.
+        try { $tweaksVer = Get-WindowsDriverVersionString } catch { $tweaksVer = 'unknown' }
+        Write-Warn "Driver version string weak ($tweaksVer) - still completing Apply"
+    }
+    if (-not $SkipDriver -and -not $driverTweaksVerified) {
+        # Carrying on and claiming it verified are two different decisions, and only the
+        # first one is meant to be soft. This used to set $driverTweaksVerified = $true on
+        # the line after warning that it was NOT verified, so the state file recorded a
+        # verification that had just failed - and Test-NvidiaDriverTweaks reads
+        # driverTweaksVerified back to decide whether Exo has a good record for this driver.
+        # The run still continues to profiles/display; it just stops lying about the tweaks.
+        Write-Warn 'Driver tweaks not fully verified - continuing profiles/display (soft)'
+        try { $tweaksVer = Convert-WindowsDriverToNvidia (Get-WindowsDriverVersionString) } catch { $tweaksVer = 'unknown' }
+    }
+    $profileDriverVersion = $null
+    if ($profileApplied) {
+        try { $profileDriverVersion = Convert-WindowsDriverToNvidia (Get-WindowsDriverVersionString) } catch { }
+    }
+    if ($profileApplied -and [string]::IsNullOrWhiteSpace([string]$profileDriverVersion)) {
+        throw 'The active driver version could not be recorded after profile import; refusing to mark the profile applied.'
+    }
+
+    # Post-verify BEFORE writing a successful state. Saving applyInProgress=false
+    # first let late display/debloat throws look like a completed Apply.
+    Set-ExoStage 'post-verify'
+    if (Test-NvidiaAppInstalled) {
+        Write-Warn 'NVIDIA App is still present on this PC after wipe; Exo prefers Control Panel only.'
+    }
+    # Display prefs were applied above; keep the measured result rather than forcing a pass.
+    if (-not [bool]$debloatResult.Ok) {
+        throw "3D profiles were applied, but NVIDIA background debloat verification failed: $($debloatResult.Issues -join '; ')"
+    }
+    if (-not [bool]$overlayResult.Ok) {
+        throw "3D profiles were applied, but NVIDIA overlay verification failed: $($overlayResult.Issues -join '; ')"
+    }
+
+    Set-ExoStage 'save-state'
+    Write-HubProgress 96 'Saving verified status...'
+    $partialReasons = [Collections.Generic.List[string]]::new()
+    if (-not $gameProfilesApplied -and @($gameProfiles).Count -gt 0) {
+        [void]$partialReasons.Add('Per-game NVIDIA profiles were not independently verified after import.')
+    }
+    # Verified may be boolean $true or string 'True' / 'unavailable' / 'False'.
+    $drsOk = [string]$drsVerification.Verified -eq 'True' -or $drsVerification.Verified -eq $true
+    if (-not $drsOk) {
+        [void]$partialReasons.Add("Base Profile live verification: $([string]$drsVerification.Verified).")
+    }
+    if (-not [bool]$driverTweaksVerified) {
+        [void]$partialReasons.Add('Driver expert tweaks were not fully verified.')
+    }
+    $applyStatus = if ($partialReasons.Count -gt 0) { 'partial' } else { 'applied' }
+
+    Save-State @{
+        version             = $Script:NvidiaOptVersion
+        # See the note on the other Save-State call: a constant here is worse than no field.
+        policy              = $(if ($SafePolicy) { 'safe-drs-v2' } else { 'full-pipeline-v2' })
+        safePolicy          = [bool]$SafePolicy
+        appliedUtc          = (Get-Date).ToUniversalTime().ToString('o')
+        gpuName             = $primary.Name
+        driver              = $primary.Driver
+        series              = $seriesId
+        gsync               = $useGsync
+        hardwarePolicy      = $hardwarePolicy
+        # Only record profile when silent import actually succeeded (no fake "installed")
+        profileFile         = $(if ($profileApplied -and $nip) { Split-Path $nip -Leaf } else { $null })
+        profileApplied      = [bool]$profileApplied
+        applyStatus         = $applyStatus
+        partialReasons      = @($partialReasons)
+        profileVersion      = $profilePackVersion
+        profileSha256       = $profileSha256
+        profileDriverVersion = $profileDriverVersion
+        profileImport       = $profileImport
+        # Live DRS verification of the imported Base Profile pins (-exportCustomized).
+        # true/false when the export ran; 'unavailable' with drsVerifyReason otherwise.
+        drsVerified         = $drsVerification.Verified
+        drsVerifiedAt       = $drsVerification.VerifiedAt
+        drsVerifiedSettingCount = [int]$drsVerification.SettingCount
+        # What the pack asked for, so support can see compared-vs-requested rather than
+        # having to guess whether a low compared count means drift or an older driver.
+        drsExpectedSettingCount = $(if ($drsVerification -is [hashtable] -and $drsVerification.ContainsKey('ExpectedCount')) { [int]$drsVerification['ExpectedCount'] } else { 0 })
+        drsMismatch         = @($drsVerification.Mismatches)
+        drsVerifyReason     = $drsVerification.Reason
+        npiPath             = $npi
+        nvidiaApp           = [bool]$appInstalled
+        nvidiaControlPanel  = [bool]$cplOk
+        clientWipe          = $clientWipe
+        # clientReinstall / nvidiaAppOptional / nvidiaAppUnsupported / nvidiaAppBeta /
+        # nvidiaAppConfigured used to be written here. Nothing read any of them - not
+        # detect, not the C# side, not the UI - and four were hardcoded literals, so
+        # they could only ever describe the code that wrote them. clientReinstall was
+        # the worst of it: it asserted Exo reinstalls the NVIDIA client, which is the
+        # exact behaviour that was removed. A state file that says something Exo does
+        # not do is worse than a state file that stays quiet.
+        controlPanelOnly    = (-not [bool]$appInstalled)
+        exoPanel        = $false
+        # advanced3dOk is never flipped true in this runner (CPL "advanced 3D" radios are not
+        # used - NPI owns DRS). Persist the real signal: profiles imported for this session.
+        advanced3dImageSettings = [bool]$profileApplied
+        displayClient       = 'nvidia-control-panel'
+        # Real result now. This was pinned to $false with an "always false" comment, which
+        # kept the detect-side marker permanently unset even once the path worked.
+        displayPrefs        = $(if ($SafePolicy) { $false } else { [bool]$displayPrefsOk })
+        gpuPower            = $(if ($SafePolicy) { $false } else { [bool]$gpuPowerOk })
+        gpuPowerDetail      = [string]$gpuPowerDetail
+        displayMethod       = $(if ($SafePolicy) { 'unchanged' } else { [string]$displayMethod })
+        displayDetails      = @($dispResult.Details)
+        debloatApplied      = $(if ($SafePolicy) { $false } else { [bool]$debloatResult.Ok })
+        # The MEASURED result, not the soft-passed one. A soft-pass is a decision about whether
+        # Apply should keep going; it is not evidence that the overlay is off, and recording it
+        # as though it were is how a detect row ends up asserting something the machine just
+        # contradicted.
+        overlayDisabled     = $(if ($SafePolicy) { $false } else { [bool]$overlayMeasuredOk })
+        driverUpdatePass    = $driverInfo
+        applyInProgress     = $false
+        pendingAfterDriver  = $false
+        driverTweaksVerified = [bool]$driverTweaksVerified
+        driverTweaksVersion = $tweaksVer
+        gameProfilesApplied = [bool]$gameProfilesApplied
+        gameProfiles        = @($gameProfiles)
+        gameProfileCount    = @($gameProfiles).Count
+        gameProfileDeltas   = $true
+        repairSnapshot      = [bool](Test-Path -LiteralPath $DrsSnapshotPath -PathType Leaf)
+        lastErrorStage      = $null
+        lastError           = $null
+        lastErrorUtc        = $null
+    }
+
+    Write-Ok 'NVIDIA Optimizer finished'
+    if ($applyStatus -eq 'partial') {
+        Write-Warn ("NVIDIA Apply completed partially: {0}" -f ($partialReasons -join '; '))
+    }
+    if ($SafePolicy) {
+        Write-Ok 'Safe policy: Base + per-game DRS via Profile Inspector; scaling/color left to Control Panel.'
+        Write-Ok 'Repair snapshot restores the complete pre-Exo NVIDIA profile database.'
+    } elseif (-not $SkipApp) {
+        if ($cplOk) {
+            Write-Ok 'Client stack: App/GFE cleaned; Control Panel available for scaling/color; 3D via Profile Inspector.'
+        } else {
+            Write-Ok 'Client stack cleaned; 3D via Profile Inspector (Control Panel UI optional).'
+        }
+    }
+    # This line was a leftover from when SafePolicy skipped displays entirely. It printed
+    # immediately after "Display prefs applied", so the same run claimed both that it had
+    # applied display settings and that it had not touched them.
+    Write-Ok "Display: $(if ($displayPrefsOk) { 'scaling, colour and refresh applied by Exo' } else { 'not applied - see the display lines above' })" 
+    $doneMethod = Get-ExoHashString $driverInfo 'Method' 'none'
+    if ($doneMethod -in @('exo-clean', 'exo-clean-partial-tweaks', 'in-place-tweaks')) {
+        Write-Ok "Driver stage ($doneMethod) completed; 3D profiles via Profile Inspector."
+    }
+    Write-HubProgress 100 'Completed successfully'
+    $doneScope = if ($SafePolicy) { 'Profile Inspector DRS policy (displays left to Control Panel)' } else { 'driver + Profile Inspector DRS + every display at best values' }
+    Write-Output ("DONE - NVIDIA {0}{1}: {2} ({3} game profiles)" -f `
+        $seriesId, $(if ($useGsync) { ' G-SYNC' } else { ' raw latency' }), $doneScope, @($gameProfiles).Count)
+    exit 0
+} catch {
+    $failStage = [string]$Script:CurrentStage
+    $failMessage = [string]$_.Exception.Message
+    # Persist the failing stage + reason so detect/UI can explain the failure
+    # after the run banner is gone (applyInProgress stays fail-closed).
+    if (-not [bool]$Script:CompletedPartialDisplayPolicy) {
+        Save-ExoFailureState -Stage $failStage -Message $failMessage
+    }
+    Write-Err ("Apply failed at stage '{0}': {1}" -f $failStage, $failMessage)
+    Write-HubProgress 100 ("Failed at {0}" -f $failStage)
+    exit 1
+}

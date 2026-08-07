@@ -1,0 +1,27 @@
+/* Exocord design tokens — AMOLED + mint HUD */
+:root {
+  --exo-bg: #000000;
+  --exo-bg-elevated: #0a0c0a;
+  --exo-bg-frost: rgba(8, 12, 9, 0.78);
+  --exo-surface: #101612;
+  --exo-border: rgba(62, 207, 142, 0.18);
+  --exo-border-strong: rgba(62, 207, 142, 0.32);
+  --exo-text: #e9f2ec;
+  --exo-text-muted: #7d8a80;
+  --exo-accent: #3ecf8e;
+  --exo-accent-dim: rgba(62, 207, 142, 0.18);
+  --exo-danger: #ff5c5c;
+  --exo-font-display: "Orbitron", "Bahnschrift", "Segoe UI Variable Display", sans-serif;
+  --exo-font-body: "IBM Plex Sans", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  --exo-radius: 0;
+  --exo-beam-speed: 3.2s;
+  --exo-motion-shell: 200ms;
+  --exo-motion-select: 160ms;
+  --exo-motion-focus: 180ms;
+  --exo-blur: 0px;
+}
+
+html[data-exocord-game-mode="1"],
+html[data-exocord-reduced-motion="1"] {
+  --exo-beam-speed: 0s;
+}

@@ -1,0 +1,64 @@
+/**
+ * Kill stock Discord chrome after Exocord app owns the screen.
+ * Nuclear: every body child except #exocord-root is non-painting.
+ * #app-mount stays in the DOM so React/webpack/WebRTC keep running.
+ */
+html[data-exocord-app="1"] body > *:not(#exocord-root) {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+  position: fixed !important;
+  inset: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  max-width: 0 !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
+  z-index: -9999 !important;
+  contain: strict !important;
+}
+
+/* Catch portals Discord attaches outside #app-mount */
+html[data-exocord-app="1"] body > div:not(#exocord-root),
+html[data-exocord-app="1"] #app-mount,
+html[data-exocord-app="1"] [class*="layerContainer"],
+html[data-exocord-app="1"] [class*="layers_"],
+html[data-exocord-app="1"] [class*="popouts_"],
+html[data-exocord-app="1"] [class*="popout_"],
+html[data-exocord-app="1"] [class*="tooltip"],
+html[data-exocord-app="1"] [class*="titleBar"],
+html[data-exocord-app="1"] nav[aria-label="Servers sidebar"] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+
+/* Login / MFA: stock Discord until session is live */
+html:not([data-exocord-app="1"]) #exocord-root {
+  display: none !important;
+}
+
+html[data-exocord-app="1"],
+html[data-exocord-app="1"] body {
+  background: #000000 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+html[data-exocord-app="1"] #exocord-root {
+  display: flex !important;
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 2147483646 !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  contain: none !important;
+}

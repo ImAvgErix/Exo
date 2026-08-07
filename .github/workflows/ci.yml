@@ -1,0 +1,466 @@
+﻿name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # App and tools target .NET 10 LTS.
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Build React UI into Exo/wwwroot
+        working-directory: ui
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+          test -f ../Exo/wwwroot/index.html
+
+      - name: Build Exo and NVIDIA display helper
+        run: |
+          dotnet build Exo.sln -c Release -p:Platform=x64
+          dotnet build tools/Exo.NvDisplay/Exo.NvDisplay.csproj -c Release
+          dotnet build tools/NetScriptDump/NetScriptDump.csproj -c Release
+
+      # Informational Native AOT probe: the source now passes local trim/AOT
+      # analysis without warnings, but shipping stays ReadyToRun until the native
+      # artifact has received the same on-hardware WinUI QA as the normal publish.
+      - name: Native AOT publish probe (informational)
+        continue-on-error: true
+        timeout-minutes: 25
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'aot-probe'
+          dotnet publish Exo/Exo.csproj -c Release -r win-x64 `
+            -p:PublishAot=true `
+            -p:WindowsPackageType=None `
+            -p:WindowsAppSDKSelfContained=true `
+            -o $out
+          if ($LASTEXITCODE -eq 0 -and (Test-Path (Join-Path $out 'Exo.exe'))) {
+            Write-Host 'EXO_AOT_PROBE: compile-success (runtime QA still required before adoption)'
+          } else {
+            Write-Host "EXO_AOT_PROBE: failed (exit $LASTEXITCODE) — ReadyToRun fallback stands"
+          }
+          exit 0
+
+      # Hard gate: compile exactly the way the release publishes, so a
+      # release-only compile error (e.g. a WebView2 API overload that resolves
+      # under `dotnet build` but not under the RID-specific publish) can never
+      # reach main again. Mirrors Publish-Exo.ps1's publish flags.
+      - name: Release-equivalent publish gate
+        shell: pwsh
+        timeout-minutes: 25
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'publish-gate'
+          dotnet publish Exo/Exo.csproj -c Release -r win-x64 --self-contained true `
+            -p:WindowsPackageType=None `
+            -p:WindowsAppSDKSelfContained=true `
+            -p:PublishReadyToRun=true `
+            -o $out
+          if ($LASTEXITCODE -ne 0) { throw "Release-equivalent publish gate failed (exit $LASTEXITCODE)" }
+          if (-not (Test-Path (Join-Path $out 'Exo.exe'))) { throw "Exo.exe missing after publish gate" }
+
+      - name: Verify C# formatting
+        run: |
+          dotnet format Exo.sln --verify-no-changes --no-restore
+          dotnet format tools/Exo.NvDisplay/Exo.NvDisplay.csproj --verify-no-changes --no-restore
+
+      - name: Compile self-extracting installer source
+        shell: pwsh
+        run: |
+          $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+          & $csc /nologo /target:winexe /optimize+ /out:"$env:RUNNER_TEMP\ExoSfx-test.exe" /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll tools\ExoSfx.cs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate scripts and bundled data
+        shell: pwsh
+        run: ./tools/Test-Repository.ps1
+
+      # ShippedScriptManifest.g.cs is generated, not hand-edited (see
+      # tools/Generate-ScriptManifest.ps1). Elevated Apply/Repair hard-fails on
+      # a hash mismatch, so a stale commit here is a silent time bomb, not a
+      # style nit — regenerate and diff against what's committed.
+      - name: Script manifest is up to date
+        shell: pwsh
+        run: |
+          ./tools/Generate-ScriptManifest.ps1
+          $diff = git diff --stat -- Exo/Security/ShippedScriptManifest.g.cs
+          if ($diff) {
+            Write-Host $diff
+            Write-Error 'Exo/Security/ShippedScriptManifest.g.cs is stale. Run tools/Generate-ScriptManifest.ps1 and commit the result.'
+            exit 1
+          }
+
+      # Smokes: UI, Network, Discord, Steam, NVIDIA, Brave, Contracts (Detect=Apply).
+      - name: UI + optimizer smoke (no UAC)
+        shell: pwsh
+        run: |
+          $projects = @(
+            'tools/Ui.Smoke/Ui.Smoke.csproj',
+            'tools/Network.Smoke/Network.Smoke.csproj',
+            'tools/Discord.Smoke/Discord.Smoke.csproj',
+            'tools/Steam.Smoke/Steam.Smoke.csproj',
+            'tools/Nvidia.Smoke/Nvidia.Smoke.csproj',
+            'tools/Brave.Smoke/Brave.Smoke.csproj',
+            'tools/Contracts.Smoke/Contracts.Smoke.csproj',
+            'tools/Security.Smoke/Security.Smoke.csproj',
+            'tools/Engine.Smoke/Engine.Smoke.csproj'
+          )
+          foreach ($p in $projects) {
+            Write-Host "=== $p ===" -ForegroundColor Cyan
+            dotnet run --project $p -c Release
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          # Real unit tests (xUnit) for the engine catalog and profiles.
+          dotnet test tests/Exo.Tests/Exo.Tests.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # UI component tests (Vitest + Testing Library against the mock host).
+          npm --prefix ui run test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Dependency vulnerability scan: NuGet and npm must be free of known
+          # advisories before a PR can merge.
+          dotnet list Exo.sln package --vulnerable --include-transitive
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm --prefix ui audit --omit=dev
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  # Real end-to-end optimizer runs on a disposable elevated runner:
+  # install the target app, Apply, assert detect isApplied=true, Repair,
+  # assert detect flips back. The runner session is admin (UAC disabled),
+  # so scripts that require elevation run directly, and apply/repair
+  # killing target processes by PID is fine here.
+  #
+  # Honest scope note: GitHub-hosted runners have NO NVIDIA GPU, so the
+  # NVIDIA optimizer (Profile Inspector import + live DRS verification)
+  # is NOT covered by this job — it stays on the Windows QA pass.
+  e2e-optimizers:
+    runs-on: windows-latest
+    needs: build-and-validate
+    timeout-minutes: 30
+    continue-on-error: false
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      # winget is not guaranteed on the windows-latest (Server) image, so
+      # each install tries winget first and falls back to the vendor's
+      # official installer with its documented silent flag:
+      #   SteamSetup.exe /S   (NSIS silent install)
+      #   DiscordSetup.exe -s (Squirrel silent install)
+      - name: Install Steam
+        shell: pwsh
+        run: |
+          $steamExe = "${env:ProgramFiles(x86)}\Steam\steam.exe"
+          if (Get-Command winget -ErrorAction SilentlyContinue) {
+            winget install Valve.Steam --silent --accept-package-agreements --accept-source-agreements --source winget
+          }
+          if (-not (Test-Path -LiteralPath $steamExe)) {
+            $setup = Join-Path $env:RUNNER_TEMP 'SteamSetup.exe'
+            Invoke-WebRequest -Uri 'https://cdn.cloudflare.steamstatic.com/client/installer/SteamSetup.exe' -OutFile $setup
+            Start-Process -FilePath $setup -ArgumentList '/S' -Wait
+          }
+          if (-not (Test-Path -LiteralPath $steamExe)) { throw "Steam install failed: $steamExe missing" }
+          $steamRoot = Split-Path -Parent $steamExe
+          # First launch bootstraps the runtime (bin\cef\...\steamwebhelper.exe)
+          # and writes config\config.vdf. Steam self-updates on first run, so
+          # wait until both exist. It never reaches a logged-in state on CI —
+          # that is handled by seeding userdata below.
+          Start-Process -FilePath $steamExe -ArgumentList '-silent','-no-browser','+app_info_update','1'
+          $deadline = (Get-Date).AddMinutes(10)
+          while ((Get-Date) -lt $deadline) {
+            $cfg = Test-Path -LiteralPath (Join-Path $steamRoot 'config\config.vdf')
+            $helper = Get-ChildItem -Path (Join-Path $steamRoot 'bin') -Filter 'steamwebhelper.exe' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($cfg -and $helper) { break }
+            Start-Sleep -Seconds 15
+          }
+          Get-Process -Name steam,steamwebhelper,steamservice -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+          Start-Sleep -Seconds 5
+          # localconfig.vdf only exists after a real login, which CI cannot do.
+          # Seed a minimal userdata account so the optimizer's VDF injection /
+          # rewrite paths run against a real file (the actual thing under test).
+          $userConfig = Join-Path $steamRoot 'userdata\1000\config'
+          New-Item -ItemType Directory -Path $userConfig -Force | Out-Null
+          $t = [char]9
+          $seedLines = @(
+            '"UserLocalConfigStore"',
+            '{',
+            ($t + '"friends"'),
+            ($t + '{'),
+            ($t + $t + '"PersonaStateDesired"' + $t + $t + '"1"'),
+            ($t + '}'),
+            ($t + '"system"'),
+            ($t + '{'),
+            ($t + $t + '"EnableGameOverlay"' + $t + $t + '"1"'),
+            ($t + '}'),
+            '}'
+          )
+          Set-Content -LiteralPath (Join-Path $userConfig 'localconfig.vdf') -Value ($seedLines -join "`n") -Encoding ASCII
+          # Ensure a minimal config.vdf exists even if first-run self-update was slow.
+          $steamConfig = Join-Path $steamRoot 'config'
+          New-Item -ItemType Directory -Path $steamConfig -Force | Out-Null
+          $cfgPath = Join-Path $steamConfig 'config.vdf'
+          if (-not (Test-Path -LiteralPath $cfgPath)) {
+            $cfgLines = @(
+              '"InstallConfigStore"',
+              '{',
+              ($t + '"Software"'),
+              ($t + '{'),
+              ($t + $t + '"Valve"'),
+              ($t + $t + '{'),
+              ($t + $t + $t + '"Steam"'),
+              ($t + $t + $t + '{'),
+              ($t + $t + $t + '}'),
+              ($t + $t + '}'),
+              ($t + '}'),
+              '}'
+            )
+            Set-Content -LiteralPath $cfgPath -Value ($cfgLines -join "`n") -Encoding ASCII
+          }
+          Write-Host "Steam installed: $steamExe (runtime + config + seeded userdata ready)"
+          exit 0
+
+      - name: Install Discord
+        shell: pwsh
+        run: |
+          $updateExe = Join-Path $env:LOCALAPPDATA 'Discord\Update.exe'
+          if (Get-Command winget -ErrorAction SilentlyContinue) {
+            winget install Discord.Discord --silent --accept-package-agreements --accept-source-agreements --source winget
+          }
+          if (-not (Test-Path -LiteralPath $updateExe)) {
+            $setup = Join-Path $env:RUNNER_TEMP 'DiscordSetup.exe'
+            Invoke-WebRequest -Uri 'https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64' -OutFile $setup
+            Start-Process -FilePath $setup -ArgumentList '-s' -Wait
+          }
+          if (-not (Test-Path -LiteralPath $updateExe)) { throw "Discord install failed: $updateExe missing" }
+          # The Squirrel installer auto-launches Discord, which downloads its
+          # modules (voice/desktop_core/...) during first run. Killing it too
+          # early leaves a broken module state the optimizer cannot repair in
+          # CI, so wait until the module set exists and is stable first.
+          function Start-DiscordClient {
+            Get-Process -Name Discord -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+            Start-Sleep -Seconds 3
+            Start-Process -FilePath $updateExe -ArgumentList '--processStart','Discord.exe','--process-start-args','--start-minimized'
+          }
+          if (-not (Get-Process -Name Discord -ErrorAction SilentlyContinue)) {
+            Start-Process -FilePath $updateExe -ArgumentList '--processStart','Discord.exe','--process-start-args','--start-minimized'
+          }
+          # The Squirrel installer auto-launches Discord, so the branch above almost never
+          # fires -- which meant that when that auto-launched instance came up wedged (no
+          # modules ever downloaded) nothing restarted it and the loop polled a dead client
+          # for the whole window before failing the job. This is a flake we hit twice.
+          # Restart it once at the halfway mark instead of widening the deadline: a client
+          # that is going to fetch its modules does so in well under four minutes, and one
+          # that has not is not going to start.
+          $deadline = (Get-Date).AddMinutes(8)
+          $relaunchAt = (Get-Date).AddMinutes(4)
+          $relaunched = $false
+          $modulesReady = $false
+          while ((Get-Date) -lt $deadline) {
+            if (-not $relaunched -and (Get-Date) -ge $relaunchAt) {
+              $relaunched = $true
+              Write-Host 'No Discord modules after 4 minutes; restarting the client once.'
+              Start-DiscordClient
+            }
+            $app = Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA 'Discord') -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
+              Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+            $modulesRoot = if ($app) { Join-Path $app.FullName 'modules' } else { $null }
+            $core = if ($modulesRoot -and (Test-Path -LiteralPath $modulesRoot)) {
+              Get-ChildItem -LiteralPath $modulesRoot -Directory -Filter 'discord_desktop_core*' -ErrorAction SilentlyContinue | Select-Object -First 1
+            }
+            $voice = if ($modulesRoot -and (Test-Path -LiteralPath $modulesRoot)) {
+              Get-ChildItem -LiteralPath $modulesRoot -Directory -Filter 'discord_voice*' -ErrorAction SilentlyContinue | Select-Object -First 1
+            }
+            $corePayload = if ($core) { Get-ChildItem -LiteralPath $core.FullName -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 }
+            $voicePayload = if ($voice) { Get-ChildItem -LiteralPath $voice.FullName -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 }
+            if ($corePayload -and $voicePayload) { $modulesReady = $true; break }
+            Start-Sleep -Seconds 10
+          }
+          if ($modulesReady) {
+            Write-Host 'Discord modules installed; letting first run settle...'
+            Start-Sleep -Seconds 30
+          } else {
+            throw 'Discord modules did not finish installing under %LOCALAPPDATA%\Discord\app-*\modules within 8 minutes'
+          }
+          # Discord may exit between enumeration and Stop-Process. Cleanup is
+          # best-effort; an already-exited process must not fail the E2E job.
+          Get-Process -Name Discord -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+          Start-Sleep -Seconds 5
+          # The optimizer refuses non-interactive apply without a logged-in
+          # session (data-preservation guard). A CI runner has no session to
+          # protect, so seed the leveldb session stores the guard checks —
+          # this exercises the full apply pipeline without weakening the
+          # guard for real users.
+          $discordAppData = Join-Path $env:APPDATA 'discord'
+          foreach ($dir in @('IndexedDB\https_discord.com_0.indexeddb.leveldb', 'Local Storage\leveldb')) {
+            $full = Join-Path $discordAppData $dir
+            New-Item -ItemType Directory -Path $full -Force | Out-Null
+            [System.IO.File]::WriteAllBytes((Join-Path $full '000003.log'), (New-Object byte[] 4096))
+            [System.IO.File]::WriteAllBytes((Join-Path $full '000004.ldb'), (New-Object byte[] 4096))
+          }
+          Write-Host "Discord installed: $updateExe (CI session store seeded)"
+          exit 0
+
+      # Discord.Smoke also runs in build-and-validate, but its live-detect assertion picks a
+      # DIFFERENT expected feature row depending on whether Discord is installed — and on that
+      # runner it never is, so only the "Discord install" branch was ever executed. The
+      # installed branch went stale when the row was renamed in 3.13.11 and nothing noticed:
+      # red on every real gaming PC, green on every runner, straight through the 4.4.1 release.
+      # Running it here, where Discord genuinely exists, is what makes that branch covered.
+      - name: Discord.Smoke with Discord actually installed
+        shell: pwsh
+        run: |
+          dotnet run --project tools/Discord.Smoke -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Discord E2E (apply, detect, repair)
+        shell: pwsh
+        env:
+          EXO_CI_BOOT_PROBE: '1'
+        run: |
+          function Get-DiscordDetect {
+            $raw = pwsh -NoProfile -File Exo/Scripts/Discord/Exo-Discord-Detect.ps1
+            if ($LASTEXITCODE -ne 0) { throw "Discord detect exited $LASTEXITCODE" }
+            return ($raw | Select-Object -Last 1 | ConvertFrom-Json)
+          }
+          function Show-DetectRows($detect) {
+            foreach ($f in $detect.features) { Write-Host ("  row: {0} => active={1}" -f $f.title, $f.active) }
+          }
+          pwsh -NoProfile -File Exo/Scripts/Discord/Exo-Discord-Run.ps1 -NonInteractive
+          if ($LASTEXITCODE -ne 0) { throw "Discord apply exited $LASTEXITCODE" }
+          $d = Get-DiscordDetect
+          if (-not $d.isApplied) { Show-DetectRows $d; throw "Detect after apply: isApplied=false ($($d.statusText))" }
+          Write-Host "Detect after apply: isApplied=true ($($d.statusText))"
+          pwsh -NoProfile -File Exo/Scripts/Discord/Exo-Discord-Repair.ps1 -NonInteractive
+          if ($LASTEXITCODE -ne 0) { throw "Discord repair exited $LASTEXITCODE" }
+          $d = Get-DiscordDetect
+          if ($d.isApplied) { throw "Detect after repair still reports isApplied=true" }
+          Write-Host "Detect after repair: isApplied=false ($($d.statusText))"
+
+      # Steam optimizer aborts when a game is running — never the case here.
+      - name: Steam E2E (apply, detect, repair)
+        shell: pwsh
+        run: |
+          function Get-SteamDetect {
+            $raw = pwsh -NoProfile -File Exo/Scripts/Steam/Exo-Steam-Detect.ps1
+            if ($LASTEXITCODE -ne 0) { throw "Steam detect exited $LASTEXITCODE" }
+            return ($raw | Select-Object -Last 1 | ConvertFrom-Json)
+          }
+          function Show-DetectRows($detect) {
+            foreach ($f in $detect.features) { Write-Host ("  row: {0} => active={1}" -f $f.title, $f.active) }
+          }
+          pwsh -NoProfile -File Exo/Scripts/Steam/Exo-Steam-Run.ps1 -NonInteractive
+          if ($LASTEXITCODE -ne 0) { throw "Steam apply exited $LASTEXITCODE" }
+          $s = Get-SteamDetect
+          if (-not $s.isApplied) { Show-DetectRows $s; throw "Detect after apply: isApplied=false ($($s.statusText))" }
+          Write-Host "Detect after apply: isApplied=true ($($s.statusText))"
+          pwsh -NoProfile -File Exo/Scripts/Steam/Exo-Steam-Repair.ps1 -NonInteractive
+          if ($LASTEXITCODE -ne 0) { throw "Steam repair exited $LASTEXITCODE" }
+          $s = Get-SteamDetect
+          if ($s.isApplied) { throw "Detect after repair still reports isApplied=true" }
+          Write-Host "Detect after repair: isApplied=false ($($s.statusText))"
+
+      # NetScriptDump writes the generated network apply/repair/benchmark
+      # scripts to a folder; the runner session is already elevated, so the
+      # apply script runs with the rights the real optimizer would request.
+      - name: Internet E2E (dump scripts, apply, snapshot, repair)
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'netscripts'
+          dotnet run --project tools/NetScriptDump -c Release -- $out
+          if ($LASTEXITCODE -ne 0) { throw "NetScriptDump exited $LASTEXITCODE" }
+          Get-ChildItem -Path $out | ForEach-Object { Write-Host $_.FullName }
+          $apply = Get-ChildItem -Path $out -Filter '*apply*.ps1' | Select-Object -First 1
+          if (-not $apply) { throw "No apply script dumped under $out" }
+          pwsh -NoProfile -ExecutionPolicy Bypass -File $apply.FullName
+          if ($LASTEXITCODE -ne 0) { throw "Network apply exited $LASTEXITCODE" }
+          $snapshot = Join-Path $env:LOCALAPPDATA 'Exo\network-snapshot.json'
+          if (-not (Test-Path -LiteralPath $snapshot)) { throw "Pre-apply snapshot missing: $snapshot" }
+          Write-Host "Snapshot present: $snapshot"
+          $repair = Get-ChildItem -Path $out -Filter '*repair*.ps1' | Select-Object -First 1
+          if (-not $repair) { throw "No repair script dumped under $out" }
+          pwsh -NoProfile -ExecutionPolicy Bypass -File $repair.FullName
+          if ($LASTEXITCODE -ne 0) { throw "Network repair exited $LASTEXITCODE" }
+          Write-Host 'Network repair exited cleanly'
+
+      # Startup-time measurement (Workstream 12/10 proof): publish the app the
+      # same way Publish-Exo.ps1 does (self-contained + ReadyToRun) and time
+      # process start -> main window handle. A publish failure is a real
+      # regression and fails the job; a missing window is a headless-runner
+      # limitation and only warns.
+      - name: Measure app startup (informational)
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'startup-probe'
+          dotnet publish Exo/Exo.csproj -c Release -r win-x64 `
+            --self-contained true `
+            -p:WindowsPackageType=None `
+            -p:WindowsAppSDKSelfContained=true `
+            -p:PublishReadyToRun=true `
+            -o $out
+          if ($LASTEXITCODE -ne 0) { throw "Startup probe publish failed (exit $LASTEXITCODE)" }
+          $exe = Join-Path $out 'Exo.exe'
+          if (-not (Test-Path -LiteralPath $exe)) { throw "Exo.exe missing after publish: $exe" }
+          $sw = [System.Diagnostics.Stopwatch]::StartNew()
+          $p = Start-Process -FilePath $exe -PassThru
+          $ready = $false
+          $deadline = (Get-Date).AddSeconds(90)
+          while ((Get-Date) -lt $deadline) {
+            Start-Sleep -Milliseconds 100
+            $p.Refresh()
+            if ($p.HasExited) { break }
+            if ($p.MainWindowHandle -ne [IntPtr]::Zero) { $ready = $true; break }
+          }
+          $sw.Stop()
+          if ($ready) {
+            Write-Host ("EXO_STARTUP_MS: {0}" -f $sw.ElapsedMilliseconds)
+          } elseif ($p.HasExited) {
+            Write-Host "::warning::Startup probe: app exited (code $($p.ExitCode)) before a window appeared — runner has no interactive GPU/desktop guarantee; informational only."
+          } else {
+            Write-Host '::warning::Startup probe: no main window within 90s on the runner — informational only.'
+          }
+          Get-Process -Name Exo -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          exit 0
+
+      - name: Collect Exo logs
+        if: failure()
+        shell: pwsh
+        run: |
+          $dest = Join-Path $env:RUNNER_TEMP 'exo-failure-logs'
+          New-Item -ItemType Directory -Path $dest -Force | Out-Null
+          Get-ChildItem -Path $env:TEMP -Filter 'exo-*.log' -ErrorAction SilentlyContinue |
+            Copy-Item -Destination $dest -ErrorAction SilentlyContinue
+          $state = Join-Path $env:LOCALAPPDATA 'Exo'
+          if (Test-Path -LiteralPath $state) {
+            Copy-Item -Path $state -Destination (Join-Path $dest 'ExoState') -Recurse -ErrorAction SilentlyContinue
+          }
+          exit 0
+
+      - name: Upload Exo logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-exo-logs
+          path: ${{ runner.temp }}/exo-failure-logs
+          if-no-files-found: warn

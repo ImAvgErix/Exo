@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Security.Smoke</RootNamespace>
+    <AssemblyName>Security.Smoke</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\Exo\Security\PowerShellHostResolver.cs" Link="Shipped\PowerShellHostResolver.cs" />
+    <Compile Include="..\..\Exo\Security\ShippedArtifactClosureVerifier.cs" Link="Shipped\ShippedArtifactClosureVerifier.cs" />
+    <Compile Include="..\..\Exo\Security\ElevatedShippedExecutionPlan.cs" Link="Shipped\ElevatedShippedExecutionPlan.cs" />
+  </ItemGroup>
+</Project>

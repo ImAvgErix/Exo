@@ -1,0 +1,187 @@
+﻿name: Release
+
+# Stable releases are built once from the immutable event SHA. The validated
+# installer and its checksum cross the job boundary as one Actions artifact;
+# the publish job never rebuilds from a moving branch.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Build React UI into Exo/wwwroot
+        working-directory: ui
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+          test -f ../Exo/wwwroot/index.html
+
+      - name: Build Exo and NVIDIA display helper
+        run: |
+          dotnet build Exo.sln -c Release -p:Platform=x64
+          dotnet build tools/Exo.NvDisplay/Exo.NvDisplay.csproj -c Release
+
+      - name: Validate scripts and bundled data
+        shell: pwsh
+        run: ./tools/Test-Repository.ps1
+
+      - name: Script manifest is up to date
+        shell: pwsh
+        run: |
+          ./tools/Generate-ScriptManifest.ps1
+          $diff = git status --porcelain Exo/Security/ShippedScriptManifest.g.cs
+          if ($diff) {
+            Write-Host '::error::Script manifest is stale - regenerate and commit it.'
+            git --no-pager diff -- Exo/Security/ShippedScriptManifest.g.cs
+            exit 1
+          }
+
+      - name: UI and optimizer smokes (no UAC)
+        shell: pwsh
+        run: |
+          $projects = @(
+            'tools/Ui.Smoke/Ui.Smoke.csproj',
+            'tools/Contracts.Smoke/Contracts.Smoke.csproj',
+            'tools/Network.Smoke/Network.Smoke.csproj',
+            'tools/Discord.Smoke/Discord.Smoke.csproj',
+            'tools/Steam.Smoke/Steam.Smoke.csproj',
+            'tools/Nvidia.Smoke/Nvidia.Smoke.csproj',
+            'tools/Brave.Smoke/Brave.Smoke.csproj'
+          )
+          foreach ($project in $projects) {
+            Write-Host "=== $project ===" -ForegroundColor Cyan
+            dotnet run --project $project -c Release
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Build the release installer from the validated checkout
+        shell: pwsh
+        run: |
+          ./Publish-Exo.ps1 -Configuration Release
+          if (-not (Test-Path release/Exo.exe -PathType Leaf)) {
+            throw 'Publish-Exo.ps1 did not produce release/Exo.exe.'
+          }
+          $hash = (Get-FileHash release/Exo.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  Exo.exe" | Set-Content release/Exo.exe.sha256 -Encoding ascii -NoNewline
+
+      - name: Generate SBOM for the release
+        shell: pwsh
+        run: |
+          # .NET and npm dependency inventory for the release. Both ecosystems are
+          # locked (packages.lock.json / package-lock.json), so the SBOM reflects
+          # exactly what ships.
+          dotnet tool install --tool-path ./tools-sbom CycloneDX --version 3.5.4
+          ./tools-sbom/CycloneDX.exe dotnet Exo.sln -o release --json
+          Move-Item release/bom.json release/Exo.sbom.json -Force
+          npm --prefix ui run sbom
+          if (-not (Test-Path release/Exo.UI.sbom.json)) {
+            throw 'npm SBOM step did not produce release/Exo.UI.sbom.json.'
+          }
+
+      - name: Upload immutable installer, checksum and SBOM
+        uses: actions/upload-artifact@v6
+        with:
+          name: exo-release-${{ github.sha }}
+          path: |
+            release/Exo.exe
+            release/Exo.exe.sha256
+            release/Exo.sbom.json
+            release/Exo.UI.sbom.json
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-release:
+    runs-on: windows-latest
+    needs: validate-and-build
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Download the validated installer
+        uses: actions/download-artifact@v7
+        with:
+          name: exo-release-${{ github.sha }}
+          path: release
+
+      - name: Verify and publish the exact validated artifact
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid VERSION '$version'." }
+          $tag = "v$version"
+          if ('${{ github.ref_type }}' -eq 'tag' -and '${{ github.ref_name }}' -ne $tag) {
+            throw "Event tag '${{ github.ref_name }}' does not match VERSION tag '$tag'."
+          }
+
+          $expected = ((Get-Content release/Exo.exe.sha256 -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+          $actual = (Get-FileHash release/Exo.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "Artifact checksum mismatch: expected $expected, got $actual." }
+
+          gh release view $tag --repo '${{ github.repository }}' 1>$null 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            throw "Release $tag already exists. Releases are immutable; bump VERSION instead of replacing it."
+          }
+
+          $notes = @"
+          ## Exo $version
+
+          **[Exo.exe](https://github.com/${{ github.repository }}/releases/download/$tag/Exo.exe)** — double-click to install and launch.
+
+          Validated commit: `${{ github.sha }}`
+          SHA-256: `$actual`
+          SBOM: `Exo.sbom.json` (.NET) + `Exo.UI.sbom.json` (UI), attached to this release.
+          "@
+          gh release create $tag release/Exo.exe release/Exo.exe.sha256 `
+            release/Exo.sbom.json release/Exo.UI.sbom.json `
+            --repo '${{ github.repository }}' `
+            --title "Exo $version" `
+            --notes $notes `
+            --latest `
+            --target '${{ github.sha }}'
+          if ($LASTEXITCODE -ne 0) { throw "gh release create failed for $tag." }
+
+          $verifyDir = Join-Path $env:RUNNER_TEMP 'exo-release-verify'
+          New-Item -ItemType Directory -Path $verifyDir -Force | Out-Null
+          gh release download $tag --repo '${{ github.repository }}' --pattern Exo.exe --dir $verifyDir --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download the published installer for verification.' }
+          $remote = (Get-FileHash (Join-Path $verifyDir 'Exo.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($remote -ne $expected) { throw "Published installer checksum mismatch: expected $expected, got $remote." }
+          Write-Host "Published immutable Exo $version from ${{ github.sha }} ($remote)." -ForegroundColor Green
+
+      # SLSA-style provenance: the published installer is attested to have been
+      # built from exactly this commit by GitHub's build service, so users can
+      # verify the artifact's origin independently of the release page.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: release/Exo.exe

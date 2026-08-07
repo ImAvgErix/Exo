@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Contracts.Smoke</RootNamespace>
+    <AssemblyName>Contracts.Smoke</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\Exo\Services\ModuleStatusClassifier.cs" Link="Shipped\ModuleStatusClassifier.cs" />
+    <Compile Include="..\..\Exo\Services\NetworkLogic.cs" Link="Shipped\NetworkLogic.cs" />
+    <Compile Include="..\..\Exo\Services\NetworkApplyScriptBuilder.cs" Link="Shipped\NetworkApplyScriptBuilder.cs" />
+    <Compile Include="..\..\Exo\Services\NetworkApplyScriptBuilder.Repair.cs" Link="Shipped\NetworkApplyScriptBuilder.Repair.cs" />
+    <Compile Include="..\..\Exo\Services\NetworkApplyScriptBuilder.Benchmark.cs" Link="Shipped\NetworkApplyScriptBuilder.Benchmark.cs" />
+    <Compile Include="..\..\Exo\Models\NetworkSnapshot.cs" Link="Shipped\NetworkSnapshot.cs" />
+    <Compile Include="..\..\Exo\Services\SteamLogic.cs" Link="Shipped\SteamLogic.cs" />
+    <Compile Include="..\..\Exo\Services\DiscordLogic.cs" Link="Shipped\DiscordLogic.cs" />
+    <Compile Include="..\..\Exo\Services\NvidiaDetectLogic.cs" Link="Shipped\NvidiaDetectLogic.cs" />
+    <Compile Include="..\..\Exo\Services\ChipsetDriverLogic.cs" Link="Shipped\ChipsetDriverLogic.cs" />
+  </ItemGroup>
+</Project>

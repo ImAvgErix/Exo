@@ -1,0 +1,73 @@
+# Build / publish
+**/[Bb]in/
+**/[Oo]bj/
+**/[Dd]ebug/
+**/[Rr]elease/
+publish/
+release/
+.vs/
+*.user
+*.suo
+*.cache
+AppPackages/
+BundleArtifacts/
+Package.StoreAssociation.xml
+_pkginfo.txt
+*.appx
+*.msix
+*.msixbundle
+**/node_modules/
+
+# Local scratch / agent / IDE
+release-artifacts/
+extracted/
+dist/
+_DELETE_ME_*/
+_old_*/
+override-diff-*/
+.idea/
+*.DotSettings.user
+
+# Legacy leftover (locked files during migration — safe to delete manually)
+Disc Optimizer/
+
+# Runtime logs and local caches (Discord kit)
+Exo/Scripts/Discord/kit/logs/*.log
+Exo/Scripts/Discord/kit/logs/last-*.log
+Exo/Scripts/Discord/kit/downloads/*
+Exo/Scripts/Discord/kit/downloads/*.zip
+Exo/Scripts/Discord/kit/tools/DiscordSetup*.exe
+Exo/Scripts/Discord/kit/tools/Equilotl*.exe
+Exo/Scripts/Discord/kit/tools/pwsh/
+
+# App logs
+*.log
+
+# Built NVAPI helper (produced by Publish-Exo.ps1)
+Exo/Scripts/Nvidia/tools/
+
+.ui-shots/
+work/
+
+Exo/Assets/Logos/_contact.png
+Exo/Assets/Logos/*.tmp.png
+docs/exo-live.png
+
+
+
+# Cua live GUI captures (regenerate via tools/Cua.Qa)
+docs/cua-qa/*.png
+docs/cua-qa/*-state.json
+
+
+.tmp-logos/
+
+
+# Rust / Tauri
+target/
+apps/desktop/dist/
+apps/desktop/node_modules/
+
+
+_tweaks-ui-design/
+

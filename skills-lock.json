@@ -1,0 +1,161 @@
+{
+  "version": 1,
+  "skills": {
+    "animation-vocabulary": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/animation-vocabulary/SKILL.md",
+      "computedHash": "280c6688ef2568ad92f40c4dc638f0cc5cde0f49bdd6debd097410aa9945f44f"
+    },
+    "apple-design": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/apple-design/SKILL.md",
+      "computedHash": "0d19303902efa64eace10e6b183eb29ef3220d424c1a7fd1eafc52adde216932"
+    },
+    "deslop": {
+      "source": "millionco/react-doctor",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/deslop/SKILL.md",
+      "computedHash": "88095a619f65d6e47bf103f7c24f321ba5f77703829fb1c084c111b4a90533db"
+    },
+    "dev": {
+      "source": "microsoft/playwright-cli",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/dev/SKILL.md",
+      "computedHash": "e3644221b5e745e6de2a8a054aebf1f58577f0e59e1406ea0d5a28b41a4e6895"
+    },
+    "emil-design-eng": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/emil-design-eng/SKILL.md",
+      "computedHash": "87067d79205fdedc6d682891027dd9c7335486c4b4dc2e785638941a9d2e6061"
+    },
+    "find-animation-opportunities": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/find-animation-opportunities/SKILL.md",
+      "computedHash": "c6b1d0f6d03a11f8772b1cef4ca5cc88301ae8641ac2697c85ffa87eb458e40a"
+    },
+    "find-similar-functions": {
+      "source": "millionco/react-doctor",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/find-similar-functions/SKILL.md",
+      "computedHash": "f4278f7ce83ca53c67cf2319194ab5b3db9b794a69afa7c972cdb8be5fb20a7e"
+    },
+    "fuzz": {
+      "source": "millionco/react-doctor",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/fuzz/SKILL.md",
+      "computedHash": "059872f48f296bcec164985709541f724a25210237a11a88bbbfa8456ff6103b"
+    },
+    "hallmark": {
+      "source": "nutlope/hallmark",
+      "sourceType": "github",
+      "skillPath": "skills/hallmark/SKILL.md",
+      "computedHash": "d3a20aae61e43793d74932c92b63bcad5882e73ec1c8545b858910fd95b25136"
+    },
+    "improve-animations": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/improve-animations/SKILL.md",
+      "computedHash": "9cd956e91139211efa5e17fc5e1675b9a3f711ef38cbc92aa8f3fa5b626b7e12"
+    },
+    "improve-react": {
+      "source": "millionco/react-doctor",
+      "sourceType": "github",
+      "skillPath": "skills/improve-react/SKILL.md",
+      "computedHash": "eb8655059a4bd04c4dbee1aa3430479ef4633b63a54331db7055063a1aa9cb33"
+    },
+    "make-interfaces-feel-better": {
+      "source": "jakubkrehel/make-interfaces-feel-better",
+      "sourceType": "github",
+      "skillPath": "skills/make-interfaces-feel-better/SKILL.md",
+      "computedHash": "ee95073d274bd8f792f917a2b2c2963d46c1b31c81723e6ef3c63ffe33bd681c"
+    },
+    "pick-ui-library": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pick-ui-library/SKILL.md",
+      "computedHash": "1a0a6819d13fb5361cf5cdc923f46a1effc37cb61ecb908419eedb0e11f428fe"
+    },
+    "playwright-cli": {
+      "source": "microsoft/playwright-cli",
+      "sourceType": "github",
+      "skillPath": "skills/playwright-cli/SKILL.md",
+      "computedHash": "438b922468b7bb2ab5ce4a0f318fc65db93337f0df03908a5476effbae9487e6"
+    },
+    "product-thinking": {
+      "source": "millionco/react-doctor",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/product-thinking/SKILL.md",
+      "computedHash": "01cd5de5676ec39f4577a49fdc69c944b7892cce2a08f517413674e500a57a0f"
+    },
+    "prototype": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/prototype/SKILL.md",
+      "computedHash": "b1216a31a08fb02871f5b4ace7f31d0a1e2d9c86ddca74a37ed97d975f7bcaa2"
+    },
+    "rde-eval": {
+      "source": "millionco/react-doctor",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/rde-eval/SKILL.md",
+      "computedHash": "3cfe30b8c825eb13f5a2d255477772f37031d6ccb94f9d69e2b9965724ce56ba"
+    },
+    "react-doctor": {
+      "source": "millionco/react-doctor",
+      "sourceType": "github",
+      "skillPath": "skills/react-doctor/SKILL.md",
+      "computedHash": "79ab46cf22147748cab2f436770b95e029f6cacbc05421fefa695caff0027e2b"
+    },
+    "review-animations": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/review-animations/SKILL.md",
+      "computedHash": "6f8d633d7884c1390eff7af4bfaf7a450e798f117e1d49a555e00819dc877f64"
+    },
+    "rule-research": {
+      "source": "millionco/react-doctor",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/rule-research/SKILL.md",
+      "computedHash": "1262c48bf95605b6545e4837f898f2c63acc5fd6199c44b885a5b1a86751d2f0"
+    },
+    "rule-validate": {
+      "source": "millionco/react-doctor",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/rule-validate/SKILL.md",
+      "computedHash": "d6fc5125e43bf9df9bd8783c46400a8116108538713016f1a16d5feee64900a2"
+    },
+    "rule-writing": {
+      "source": "millionco/react-doctor",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/rule-writing/SKILL.md",
+      "computedHash": "8239109698751676d4da5361a5d8923a5651fbc03bb566523a05997a337a207e"
+    },
+    "run-parity": {
+      "source": "millionco/react-doctor",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/run-parity/SKILL.md",
+      "computedHash": "f17a35daa07d6dc45e47af041f361d8d7827a9c8965faadbae39d619e7f95de7"
+    },
+    "ship": {
+      "source": "millionco/react-doctor",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/ship/SKILL.md",
+      "computedHash": "d25b1cd1d9723c2a6f728e8c921b1e2a19ac9198d4801d11d46e8e2810552712"
+    },
+    "typo-checker": {
+      "source": "antfu/vitest",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/typo-checker/SKILL.md",
+      "computedHash": "a275516abbb8219b9084199b0230c8f496e89f8b9fe47139ab1baa880a372c87"
+    },
+    "writing-guidelines": {
+      "source": "millionco/react-doctor",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/writing-guidelines/SKILL.md",
+      "computedHash": "a8a32b09467288923cad53964011f7f19782fbc05b863a3b59ad0becda183d5f"
+    }
+  }
+}

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="#FFFFFF">
+  <!-- Continuous modern AMD mark (no text) -->
+  <path d="
+    M 28 168
+    L 92 28
+    L 118 28
+    L 168 118
+    L 140 118
+    L 112 68
+    L 64 168
+    Z
+  "/>
+  <path d="
+    M 112 108
+    H 168
+    V 124
+    H 140
+    V 156
+    H 168
+    V 172
+    H 112
+    V 108
+    Z
+  "/>
+</svg>

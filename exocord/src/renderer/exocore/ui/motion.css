@@ -1,0 +1,57 @@
+/* Exactly three product motions: shell open/close, rail/channel select, message/beam focus. */
+
+@keyframes exo-shell-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes exo-shell-out {
+  from { opacity: 1; }
+  to { opacity: 0; transform: translateY(4px); }
+}
+
+@keyframes exo-select-pulse {
+  from { box-shadow: inset 3px 0 0 transparent; }
+  to { box-shadow: inset 3px 0 0 var(--exo-accent); }
+}
+
+@keyframes exo-focus-caret {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* 1 — shell open/close */
+html[data-exocord-settings] #exocord-settings-nav,
+html[data-exocord-settings] #exocord-settings-pane {
+  animation: exo-shell-in var(--exo-motion-shell, 220ms) ease-out both;
+}
+
+/* 2 — rail / channel select */
+html[data-exocord-chrome] [class*="listItem"][class*="selected"],
+html[data-exocord-chrome] a[aria-selected="true"],
+html[data-exocord-chrome] [class*="channel"][class*="selected"] {
+  animation: exo-select-pulse var(--exo-motion-select, 160ms) ease-out both;
+}
+
+/* 3 — composer / beam focus caret feel */
+html[data-exocord-composer-focus="1"] [class*="slateTextArea"],
+html[data-exocord-composer-focus="1"] [class*="textArea"] {
+  caret-color: var(--exo-accent);
+  animation: exo-focus-caret var(--exo-motion-focus, 280ms) ease-in-out 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-exocord-settings] #exocord-settings-nav,
+  html[data-exocord-settings] #exocord-settings-pane,
+  html[data-exocord-chrome] [class*="listItem"][class*="selected"],
+  html[data-exocord-composer-focus="1"] [class*="slateTextArea"] {
+    animation: none !important;
+  }
+}
+
+html[data-exocord-game-mode="1"],
+html[data-exocord-reduced-motion="1"] {
+  --exo-motion-shell: 0ms;
+  --exo-motion-select: 0ms;
+  --exo-motion-focus: 0ms;
+}

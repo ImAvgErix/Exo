@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Nvidia.Smoke</RootNamespace>
+    <AssemblyName>Nvidia.Smoke</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\Exo\Services\NvidiaDetectLogic.cs" Link="Shipped\NvidiaDetectLogic.cs" />
+    <Compile Include="..\..\Exo\Services\NvidiaDriverLookup.cs" Link="Shipped\NvidiaDriverLookup.cs" />
+    <Compile Include="..\..\Exo\Services\NvidiaDriverPackage.cs" Link="Shipped\NvidiaDriverPackage.cs" />
+    <Compile Include="..\..\Exo\Services\NvidiaHotfixLookup.cs" Link="Shipped\NvidiaHotfixLookup.cs" />
+    <Compile Include="..\..\Exo\Services\NvidiaDriverInstaller.cs" Link="Shipped\NvidiaDriverInstaller.cs" />
+    <Compile Include="..\..\Exo\Services\NvidiaPanelLogic.cs" Link="Shipped\NvidiaPanelLogic.cs" />
+    <Compile Include="..\..\Exo\Services\NvidiaDriverHealthLogic.cs" Link="Shipped\NvidiaDriverHealthLogic.cs" />
+  </ItemGroup>
+</Project>

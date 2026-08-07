@@ -1,0 +1,153 @@
+/**
+ * Exocord layer - Exo's own client feel, written by Exo, owned by Exo.
+ *
+ * HARD RULE: variables and stable CSS features only. No hashed Discord build classes
+ * (.channelRow_e4503a and friends), no broad [class*="..."] matching, and nothing that
+ * hides or repositions an element.
+ *
+ * That rule is not stylistic. Discord's class names are build hashes that change without
+ * warning, so a rule keyed to one silently stops applying - the vendored base theme carries
+ * ~130 of them and rots a little with every Discord release. And this repo already has the
+ * scar from broad matching: a theme that painted layerContainer black covered the entire
+ * app, tooltips floating over a black void. Custom properties do not have either failure
+ * mode. An unknown one is inert - worst case a line here does nothing - and a known one
+ * cannot move the layout.
+ *
+ * Every variable consumed below is one the shipped base theme already reads back from a
+ * live client, so they are known to exist rather than hoped for.
+ *
+ * Structural work (compact message rows, hidden chrome) is deliberately NOT here. That
+ * needs the rendered client in front of a human first.
+*/
+
+/* ---------------------------------------------------------------------------
+ * 1. Motion. The single biggest "this feels faster" lever in the whole client.
+ *
+ * Discord animates most state changes over 200-300ms. On a machine tuned for
+ * frames, that is a quarter second of waiting per interaction, repeated all day.
+ * Cut to ~70ms: still perceptible as motion, no longer something you wait on.
+ *
+ * NOT set to zero on purpose. React components here listen for transitionend to
+ * unmount, and a 0s transition can fire it before the listener attaches, which
+ * strands elements on screen. 70ms is fast and still fires the event normally.
+ * Honours the OS "reduce motion" setting by going further, not by opting out.
+ * ------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+    animation-duration: 70ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 70ms !important;
+    transition-delay: 0ms !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 1ms !important;
+        transition-duration: 1ms !important;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+ * 2. Scrollbars. ::-webkit-scrollbar is a real CSS pseudo-element, not a build
+ * hash, so this survives Discord releases. Discord's default is a chunky
+ * double-bordered bar that eats horizontal space in the channel and member lists.
+ * ------------------------------------------------------------------------- */
+::-webkit-scrollbar {
+    width: 8px !important;
+    height: 8px !important;
+}
+
+::-webkit-scrollbar-corner,
+::-webkit-scrollbar-track {
+    background: transparent !important;
+    border: none !important;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: var(--background-mod-strong) !important;
+    border: none !important;
+    border-radius: 8px !important;
+    min-height: 40px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background-color: var(--background-mod-subtle) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * 3. Surfaces. Push every stable surface token to pure black for AMOLED.
+ * Elevation shadows were drawn for a grey app — flatten them so they don't
+ * read as grey halos on pitch black.
+ * ------------------------------------------------------------------------- */
+:root {
+    --background-primary: #000000;
+    --background-secondary: #000000;
+    --background-secondary-alt: #000000;
+    --background-tertiary: #000000;
+    --background-accent: #000000;
+    --background-floating: #000000;
+    --background-nested-floating: #000000;
+    --background-mobile-primary: #000000;
+    --background-mobile-secondary: #000000;
+    --background-modifier-hover: rgba(255, 255, 255, 0.04);
+    --background-modifier-active: rgba(255, 255, 255, 0.06);
+    --background-modifier-selected: rgba(255, 255, 255, 0.08);
+    --background-modifier-accent: rgba(255, 255, 255, 0.06);
+    --channeltextarea-background: #000000;
+    --input-background: #0a0a0a;
+    --legacy-elevation-high: none;
+    --legacy-elevation-low: none;
+    --elevation-high: none;
+    --elevation-low: none;
+    --elevation-medium: none;
+    --elevation-stroke: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * 4. Borders. With shadows gone, separation has to come from somewhere. Subtle
+ * hairlines rather than the default hard dividers - structure without noise.
+ * ------------------------------------------------------------------------- */
+:root {
+    --border-subtle: var(--opacity-4);
+    --border-normal: var(--opacity-8);
+    --border-muted: var(--opacity-4);
+    --app-frame-border: var(--opacity-8);
+    --input-border: var(--opacity-12);
+}
+
+/* ---------------------------------------------------------------------------
+ * 5. Interaction feedback. Pitch black swallows Discord's default hover tint,
+ * which is why an AMOLED client can feel dead to click. Lift hover/active a
+ * step so the app answers you.
+ * ------------------------------------------------------------------------- */
+:root {
+    --interactive-background-hover: var(--opacity-12);
+    --interactive-background-active: var(--opacity-20);
+    --interactive-background-selected: var(--opacity-24);
+    --message-background-hover: var(--opacity-8);
+}
+
+/* ---------------------------------------------------------------------------
+ * 6. Text rendering. Antialiased subpixel text on a pure black background
+ * blooms; greyscale antialiasing is what actually renders cleanly there.
+ * ------------------------------------------------------------------------- */
+body,
+input,
+textarea,
+button,
+select {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+/* ---------------------------------------------------------------------------
+ * 7. Image decode hint. Discord chats are image-heavy; async decode keeps a
+ * large paste from stalling the scroll it lands in.
+ * ------------------------------------------------------------------------- */
+img,
+video {
+    image-rendering: auto;
+}

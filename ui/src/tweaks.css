@@ -1,0 +1,259 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #000000;
+  --color-surface: #0c0c0c;
+  --color-elevated: #141414;
+  --color-hover: #1c1c1c;
+  --color-line: #222222;
+  --color-line-soft: #161616;
+  /* Overridden at runtime by applyTextTheme (--color-fg / muted / faint). */
+  --color-fg: #f2f2f2;
+  --color-muted: #8a8a8a;
+  --color-faint: #555555;
+  --color-good: #3dd68c;
+  --color-bad: #ff5c5c;
+  --font-sans: "Geist Variable", "Geist", "Inter", "SF Pro Display", system-ui, -apple-system, sans-serif;
+  --radius-ui: 14px;
+  /* Module rail on the fixed 1400×900 canvas. */
+  --icon-size: 44px;
+}
+
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    margin: 0;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    background: #000;
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Product is a fixed canvas — never invent scrollbars. */
+  .exo-app,
+  .exo-app * {
+    scrollbar-width: none;
+  }
+  .exo-app *::-webkit-scrollbar {
+    display: none;
+  }
+
+  .exo-app {
+    color: var(--color-fg, #f2f2f2);
+    /* Never zoom/layout-scale the shell — text size uses --exo-text-scale only. */
+    zoom: 1;
+  }
+
+  /*
+   * Text size setting scales type only (not cards, icons, padding, or layout).
+   * Tailwind text-[Npx]/[Nrem] utilities used by ExoApp are multiplied by --exo-text-scale.
+   */
+  .exo-app :where(.text-\[10px\]) { font-size: calc(10px * var(--exo-text-scale, 1)) !important; }
+  .exo-app :where(.text-\[11px\]) { font-size: calc(11px * var(--exo-text-scale, 1)) !important; }
+  .exo-app :where(.text-\[12px\]) { font-size: calc(12px * var(--exo-text-scale, 1)) !important; }
+  .exo-app :where(.text-\[13px\]) { font-size: calc(13px * var(--exo-text-scale, 1)) !important; }
+  .exo-app :where(.text-\[14px\]) { font-size: calc(14px * var(--exo-text-scale, 1)) !important; }
+  .exo-app :where(.text-\[15px\]) { font-size: calc(15px * var(--exo-text-scale, 1)) !important; }
+  .exo-app :where(.text-\[22px\]) { font-size: calc(22px * var(--exo-text-scale, 1)) !important; }
+  .exo-app :where(.text-\[26px\]) { font-size: calc(26px * var(--exo-text-scale, 1)) !important; }
+  .exo-app :where(.text-\[30px\]) { font-size: calc(30px * var(--exo-text-scale, 1)) !important; }
+  .exo-app :where(.text-\[1rem\]) { font-size: calc(1rem * var(--exo-text-scale, 1)) !important; }
+  .exo-app :where(.text-\[1\.35rem\]) { font-size: calc(1.35rem * var(--exo-text-scale, 1)) !important; }
+  .exo-app :where(.text-\[1\.5rem\]) { font-size: calc(1.5rem * var(--exo-text-scale, 1)) !important; }
+  .exo-app :where(.text-\[1\.6rem\]) { font-size: calc(1.6rem * var(--exo-text-scale, 1)) !important; }
+  .exo-app :where(.text-\[2rem\]) { font-size: calc(2rem * var(--exo-text-scale, 1)) !important; }
+  .exo-app :where(.text-\[2\.25rem\]) { font-size: calc(2.25rem * var(--exo-text-scale, 1)) !important; }
+  .exo-app :where(.text-\[2\.5rem\]) { font-size: calc(2.5rem * var(--exo-text-scale, 1)) !important; }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  [role="radio"]:not(:disabled),
+  a {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  :focus {
+    outline: none;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.35);
+    outline-offset: 2px;
+  }
+}
+
+.scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.icon-btn {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  border-radius: var(--radius-ui);
+  border: none;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: transparent;
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    background 140ms ease,
+    opacity 140ms ease;
+}
+
+.icon-btn:disabled,
+.icon-btn.is-missing {
+  opacity: 0.38;
+  filter: grayscale(1);
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+.icon-btn.is-missing .icon-plate,
+.icon-btn:disabled .icon-plate {
+  filter: grayscale(1) brightness(0.75);
+}
+
+/* WinUI SetTitleBar + CSS drag: interactive chrome must opt out of app-region. */
+.exo-titlebar {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.exo-titlebar button,
+.exo-titlebar a,
+.exo-titlebar nav,
+.exo-titlebar [role='menu'],
+.exo-no-drag {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.icon-btn:not(:disabled):hover {
+  transform: scale(1.06);
+}
+
+.icon-btn:not(:disabled):active {
+  transform: scale(0.96);
+}
+
+.icon-btn[data-on="true"] {
+  box-shadow:
+    0 0 0 2px #000,
+    0 0 0 3.5px #f2f2f2;
+  z-index: 1;
+}
+
+/* Home / settings — fill only, no selection ring */
+.icon-btn.chrome[data-on="true"],
+.icon-btn.chrome {
+  box-shadow: none;
+}
+
+.icon-plate {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* Real img centering — not background-image guesswork */
+.icon-plate img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 64%;
+  max-height: 64%;
+  object-fit: contain;
+  object-position: center;
+}
+
+.icon-plate img[data-wide="true"] {
+  max-width: 78%;
+  max-height: 34%;
+}
+
+.icon-plate img[data-tight="true"] {
+  max-width: 52%;
+  max-height: 52%;
+}
+
+.card {
+  border-radius: var(--radius-ui);
+  border: 1px solid var(--color-line-soft);
+  background: var(--color-surface);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 800ms linear infinite;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade {
+  animation: fade 160ms ease-out both;
+}
+
+@keyframes drop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.drop {
+  animation: drop 140ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade,
+  .drop,
+  .spin,
+  .icon-btn {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+

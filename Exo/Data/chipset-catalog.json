@@ -1,0 +1,94 @@
+{
+  "schema": 1,
+  "updated": "2026-07-31",
+  "notes": "Target versions for CPU/chipset software. Prepare is fully automatic: Microsoft Update Catalog + Windows Update download/install, then optional strip. Vendor landing pages are reference only — Exo does not require manual downloads.",
+  "packages": [
+    {
+      "id": "amd-chipset",
+      "vendor": "amd",
+      "kind": "chipset",
+      "title": "AMD Chipset Software",
+      "targetVersion": "8.07.16.1035",
+      "sockets": ["AM4", "AM5", "sTRX4", "sWRX8", "SP3", "SP6", "FP7", "FP8"],
+      "downloadUrl": "https://www.amd.com/en/support/download/drivers.html",
+      "downloadIsLandingPage": true,
+      "supportUrl": "https://www.amd.com/en/support/download/drivers.html",
+      "fileNameHints": [
+        "amd_chipset_software",
+        "amd-chipset",
+        "chipset_software",
+        "Chipset_Software"
+      ],
+      "installSilentArgs": ["-INSTALL"],
+      "stripDirectoryNames": [
+        "RyzenMaster",
+        "AMDRyzenMaster",
+        "AMD_Software",
+        "AMDSoftware",
+        "BrandIcon",
+        "CCC2",
+        "CN",
+        "WVRM"
+      ],
+      "stripFileNameContains": [
+        "RyzenMaster",
+        "AMDInstallManager",
+        "BrandIcon",
+        "Wraith",
+        "Lighting"
+      ],
+      "neverStripContains": [
+        "GPIO",
+        "SMBUS",
+        "I2C",
+        "PPM",
+        "PSP",
+        "PCI",
+        "SATA",
+        "USB",
+        "IOMMU",
+        "SFH",
+        "PT",
+        "AM4",
+        "AM5",
+        "Chipset"
+      ]
+    },
+    {
+      "id": "intel-chipset",
+      "vendor": "intel",
+      "kind": "chipset",
+      "title": "Intel Chipset Device Software",
+      "targetVersion": "10.1.20404.8794",
+      "sockets": ["LGA1700", "LGA1851", "LGA1200", "LGA1151", "LGA2066", "BGA"],
+      "downloadUrl": "https://www.intel.com/content/www/us/en/download/19347/chipset-inf-utility.html",
+      "downloadIsLandingPage": true,
+      "supportUrl": "https://www.intel.com/content/www/us/en/download/19347/chipset-inf-utility.html",
+      "fileNameHints": [
+        "SetupChipset",
+        "chipset",
+        "inf-utility",
+        "Chipset_Device"
+      ],
+      "installSilentArgs": ["-s", "-norestart", "-acceptEULA"],
+      "stripDirectoryNames": [
+        "DSA",
+        "DriverSupportAssistant",
+        "ComputingImprovementProgram",
+        "IntelDriverSupportAssistant"
+      ],
+      "stripFileNameContains": [
+        "DSA",
+        "SupportAssistant",
+        "ComputingImprovement"
+      ],
+      "neverStripContains": [
+        "INF",
+        "Chipset",
+        "SetupChipset",
+        "HECI",
+        "MEI"
+      ]
+    }
+  ]
+}

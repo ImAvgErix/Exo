@@ -1,0 +1,141 @@
+name: Prerelease (test build)
+
+# Opt-in TEST builds for validating unverified work (native NVAPI, driver work,
+# browser changes) on real hardware WITHOUT touching the stable channel.
+#
+# GitHub marks these prerelease=true. The app's updater only reads
+# /releases/latest, which EXCLUDES prereleases, so stable installs never see or
+# auto-update to a test build. To also stop a stable build from ever prompting to
+# replace a tester's prerelease, bump the source branch's VERSION *ahead* of the
+# current stable version before dispatching (the tester's app is then "newer"
+# than latest stable, so its updater stays quiet).
+#
+# This workflow only ever CREATES a prerelease; it never prunes or edits stable
+# releases, so it can't disturb the stable channel.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or SHA to build (the code you want to test)'
+        required: true
+        default: 'main'
+      label:
+        description: 'Short tag label, e.g. nvidia, brave'
+        required: true
+        default: 'test'
+
+permissions:
+  contents: write
+
+jobs:
+  prerelease:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.ref }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Build React UI into Exo/wwwroot
+        working-directory: ui
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+          test -f ../Exo/wwwroot/index.html
+
+      - name: Build Exo and NVIDIA display helper (compile gate)
+        run: |
+          dotnet build Exo.sln -c Release -p:Platform=x64
+          dotnet build tools/Exo.NvDisplay/Exo.NvDisplay.csproj -c Release
+
+      - name: Validate scripts and bundled data
+        shell: pwsh
+        run: ./tools/Test-Repository.ps1
+
+      # A prerelease is an installable Exo.exe that testers run on real hardware, so it needs
+      # the same gates as anything else that reaches a machine. This job used to publish one
+      # with no smoke coverage at all: a compile gate and Test-Repository, then straight to
+      # release. That is exactly how a red Discord.Smoke shipped through 4.4.1 unnoticed.
+      - name: Script manifest is up to date
+        shell: pwsh
+        run: |
+          ./tools/Generate-ScriptManifest.ps1
+          $diff = git status --porcelain Exo/Security/ShippedScriptManifest.g.cs
+          if ($diff) {
+            Write-Host "::error::Script manifest is stale - re-run tools/Generate-ScriptManifest.ps1 and commit."
+            git --no-pager diff -- Exo/Security/ShippedScriptManifest.g.cs
+            exit 1
+          }
+
+      - name: UI + optimizer smokes (no UAC)
+        shell: pwsh
+        run: |
+          $projects = @(
+            'tools/Ui.Smoke/Ui.Smoke.csproj',
+            'tools/Contracts.Smoke/Contracts.Smoke.csproj',
+            'tools/Network.Smoke/Network.Smoke.csproj',
+            'tools/Discord.Smoke/Discord.Smoke.csproj',
+            'tools/Steam.Smoke/Steam.Smoke.csproj',
+            'tools/Nvidia.Smoke/Nvidia.Smoke.csproj',
+            'tools/Brave.Smoke/Brave.Smoke.csproj'
+          )
+          foreach ($p in $projects) {
+            Write-Host "=== $p ===" -ForegroundColor Cyan
+            dotnet run --project $p -c Release
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Build Exo.exe (self-extracting installer)
+        shell: pwsh
+        run: |
+          ./Publish-Exo.ps1 -Configuration Release
+          if (-not (Test-Path release/Exo.exe -PathType Leaf)) {
+            throw 'Publish-Exo.ps1 did not produce release/Exo.exe.'
+          }
+          $hash = (Get-FileHash release/Exo.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  Exo.exe" | Set-Content release/Exo.exe.sha256 -Encoding ascii -NoNewline
+
+      - name: Publish GitHub prerelease
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $env:Path = "C:\Program Files\GitHub CLI;C:\Program Files\Git\cmd;C:\Program Files\dotnet;" + $env:Path
+          $version = (Get-Content VERSION -Raw).Trim()
+          $label = "${{ github.event.inputs.label }}"
+          $sha = (git rev-parse HEAD).Trim()
+          $short = $sha.Substring(0, 7)
+          $tag = "v$version-$label.${{ github.run_number }}"
+          $sfx = Join-Path 'release' 'Exo.exe'
+          if (-not (Test-Path $sfx)) { throw "Missing Exo.exe at $sfx" }
+          $checksum = Join-Path 'release' 'Exo.exe.sha256'
+          if (-not (Test-Path $checksum)) { throw "Missing checksum at $checksum" }
+          $expected = ((Get-Content $checksum -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+          $actual = (Get-FileHash $sfx -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "Prerelease checksum mismatch before publish." }
+          $notes = "Prerelease / test build from ${{ github.event.inputs.ref }} (@$short, SHA-256 $actual). The stable channel does not see or auto-update to this. Download Exo.exe below and double-click to install (installs to %LocalAppData%\Exo\app; Windows 11 x64; if SmartScreen appears: More info -> Run anyway)."
+          gh release create $tag $sfx $checksum --repo "${{ github.repository }}" --title "Exo $version test - $label" --notes $notes --prerelease --target $sha
+          if ($LASTEXITCODE -ne 0) { throw "gh release create failed for $tag" }
+          $verifyDir = Join-Path $env:RUNNER_TEMP 'exo-prerelease-verify'
+          New-Item -ItemType Directory -Path $verifyDir -Force | Out-Null
+          gh release download $tag --repo "${{ github.repository }}" --pattern Exo.exe --dir $verifyDir --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Could not download prerelease $tag for verification." }
+          $remote = (Get-FileHash (Join-Path $verifyDir 'Exo.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($remote -ne $expected) { throw "Published prerelease checksum mismatch: expected $expected, got $remote." }
+          Write-Host "Prerelease published from $sha and verified: https://github.com/${{ github.repository }}/releases/tag/$tag"

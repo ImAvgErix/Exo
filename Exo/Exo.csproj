@@ -1,0 +1,101 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>Exo</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!-- Default to x64 so `dotnet run` / `dotnet build` find the same output path -->
+    <Platforms>x64</Platforms>
+    <Platform Condition="'$(Platform)' == '' or '$(Platform)' == 'AnyCPU'">x64</Platform>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <ApplicationIcon>Assets\Exo.ico</ApplicationIcon>
+    <AssemblyName>Exo</AssemblyName>
+    <Product>Exo</Product>
+    <Company>Exo</Company>
+    <Description>Private, reversible Windows optimization.</Description>
+    <DefineConstants>DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Keep the self-contained app lean: WinUI + runtime only. The full
+         Microsoft.WindowsAppSDK metapackage also ships unused AI/ML, Widgets,
+         and DWrite components (including ONNX Runtime and DirectML). -->
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="9.0.6" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="2.3.0" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" Version="2.3.1" />
+    <!-- WinUI 2.3.0's dependency metadata names an unpublished rolling build;
+         pin the released component versions selected by the 2.3.1 metapackage. -->
+    <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" Version="2.3.5" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" Version="2.1.3" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2270" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <Manifest Include="$(ApplicationManifest)" />
+    <PackageReference Include="SQLitePCLRaw.bundle_winsqlite3" Version="2.1.11" />
+  </ItemGroup>
+
+  <!-- Bundle optimizer scripts next to the app (exclude multi-MB caches; download on demand) -->
+  <ItemGroup>
+    <Content Include="Scripts\**\*" Exclude="Scripts\Placeholders\**\*;Scripts\Discord\kit\tools\discord-modules\**\*;Scripts\Discord\kit\tools\desktop.asar;Scripts\Discord\kit\tools\equicord.asar;Scripts\Discord\kit\tools\DiscordSetup*.exe;Scripts\Discord\kit\tools\Equilotl*.exe;Scripts\Discord\kit\tools\pwsh\**\*;Scripts\Discord\kit\downloads\**\*;Scripts\Discord\kit\logs\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\**\*" Exclude="Assets\Logos\_contact.png;Assets\Logos\*.tmp.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!-- In-app changelog (repo root CHANGELOG.md) -->
+    <Content Include="..\CHANGELOG.md" Link="CHANGELOG.md" Condition="Exists('..\CHANGELOG.md')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!--
+      Always ship committed React UI. Releases previously skipped packing wwwroot
+      when ui/node_modules was absent (CI never ran npm ci) -> "Exo UI not built".
+    -->
+    <Content Include="wwwroot\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!-- Chipset driver catalog (AMD / Intel CPU package targets + strip rules). -->
+    <Content Include="Data\chipset-catalog.json" Condition="Exists('Data\chipset-catalog.json')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!--
+    Optional rebuild when node_modules exists; re-include so hashed asset renames
+    don't leave stale Content paths from evaluation time (MSB3030).
+  -->
+  <Target Name="BuildWebUi" BeforeTargets="PrepareForBuild" Condition="Exists('$(MSBuildThisFileDirectory)..\ui\package.json') And Exists('$(MSBuildThisFileDirectory)..\ui\node_modules')">
+    <Exec Command="npm run build" WorkingDirectory="$(MSBuildThisFileDirectory)..\ui" IgnoreExitCode="false" />
+    <ItemGroup>
+      <Content Remove="wwwroot\**\*" />
+      <Content Include="wwwroot\**\*">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="EnsureWwwRootPacked" BeforeTargets="PrepareForBuild">
+    <Error
+      Condition="!Exists('$(MSBuildThisFileDirectory)wwwroot\index.html')"
+      Text="Exo/wwwroot/index.html missing. Run: cd ui &amp;&amp; npm ci &amp;&amp; npm run build" />
+  </Target>
+
+  <!-- Unpackaged WinUI 3 bootstrap -->
+  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <ProjectCapability Include="Msix" />
+  </ItemGroup>
+</Project>
+
+
+

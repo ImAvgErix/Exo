@@ -1,0 +1,52 @@
+/* Exocord first-party theme layer — sits on / overrides AMOLED vendor tokens. */
+html,
+body,
+.appMount_d3a5d0,
+#app-mount {
+  background: var(--exo-bg, #000) !important;
+  color: var(--exo-text, #e8ecef) !important;
+  font-family: var(--exo-font-body) !important;
+}
+
+:root {
+  --background-primary: var(--exo-bg, #000) !important;
+  --background-secondary: var(--exo-bg-elevated, #0a0a0a) !important;
+  --background-secondary-alt: var(--exo-surface, #0e1012) !important;
+  --background-tertiary: #050505 !important;
+  --background-accent: var(--exo-accent-dim) !important;
+  --background-floating: var(--exo-bg-elevated, #0a0a0a) !important;
+  --background-modifier-hover: rgba(255, 255, 255, 0.04) !important;
+  --background-modifier-active: rgba(255, 255, 255, 0.06) !important;
+  --background-modifier-selected: var(--exo-accent-dim) !important;
+  --text-normal: var(--exo-text) !important;
+  --text-muted: var(--exo-text-muted) !important;
+  --text-link: var(--exo-accent) !important;
+  --brand-experiment: var(--exo-accent) !important;
+  --brand-500: var(--exo-accent) !important;
+  --control-brand-foreground: var(--exo-accent) !important;
+  --focus-primary: var(--exo-accent) !important;
+  --channel-icon: var(--exo-text-muted) !important;
+  --interactive-normal: var(--exo-text-muted) !important;
+  --interactive-hover: var(--exo-text) !important;
+  --interactive-active: var(--exo-accent) !important;
+  --interactive-muted: #5c6570 !important;
+}
+
+/* Floating slim bars — friends / channel header feel without pill clusters */
+html[data-exocord-chrome] [class*="title"][class*="container"],
+html[data-exocord-chrome] [class*="searchBar"],
+.exo-float-bar {
+  background: var(--exo-bg-elevated) !important;
+  border: 1px solid var(--exo-border) !important;
+  border-radius: var(--exo-radius) !important;
+  box-shadow: none !important;
+}
+
+/* Hide Nitro / shop / gift chrome when shells own the surface */
+html[data-exocord-chrome] [class*="giftButton"],
+html[data-exocord-chrome] [href="/store"],
+html[data-exocord-chrome] [href="/nitro"],
+html[data-exocord-settings] [data-settings-sidebar-item="nitro_panel"],
+html[data-exocord-settings] [data-settings-sidebar-item="gift_inventory_panel"] {
+  display: none !important;
+}

@@ -1,0 +1,13 @@
+GeForce Hotfix Display Driver version 610.82
+Updated 07/22/2026 08:04 AM
+GeForce Hotfix Display Driver version 610.82
+GeForce Hotfix Display Driver version 610.82 is based on our latest [Game Ready Driver 610.74](https://www.nvidia.com/en-us/geforce/news/doom-the-dark-ages-revelations-geforce-game-ready-driver/).
+
+This hotfix addresses the following:
+
+* [Halo: Campaign Evolved] Stability issues on GeForce RTX 50 series when using 610.xx drivers. [6259837]
+* [Path of Exile 2] Fixed intermittent long pauses that could occur after extended gameplay sessions in DX12 mode [5090018]
+
+A GeForce driver is an incredibly complex piece of software, We have an army of software engineers constantly adding features and fixing bugs. To be sure, these Hotfix drivers are beta, optional and provided as-is. They are run through a much abbreviated QA process. The sole reason they exist is to get fixes out to you more quickly. The safest option is to wait for the next WHQL certified driver.
+
+[Click here](https://international.download.nvidia.com/Windows/610.82hf/610.82-desktop-notebook-win10-win11-64bit-international-dch.hf.exe) to download the GeForce Hotfix display driver version 610.82 for Windows 10 x64 / Windows 11 x64

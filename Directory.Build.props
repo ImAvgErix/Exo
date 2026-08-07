@@ -1,0 +1,15 @@
+<Project>
+  <PropertyGroup>
+    <!-- Lets non-Windows tooling (GitHub dependency submission) restore the Windows-targeting projects. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Single source of version truth: the VERSION file at the repo root. The
+         Release-Exo.ps1 flow, the UI package metadata and MSBuild all read it,
+         so a version bump cannot land in one place and be invisible elsewhere. -->
+    <VersionFile>$(MSBuildThisFileDirectory)VERSION</VersionFile>
+    <ExoVersion>$([System.IO.File]::ReadAllText('$(VersionFile)').Trim())</ExoVersion>
+    <Version>$(ExoVersion)</Version>
+  </PropertyGroup>
+</Project>

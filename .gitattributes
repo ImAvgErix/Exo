@@ -1,0 +1,45 @@
+# Binary assets first, and explicitly. Exo/wwwroot holds the built UI bundle *and*
+# the game/module logos and webfonts. A blanket rule over that directory would hand
+# PNG and WOFF bytes to git's line-ending filter, which rewrites any 0x0D 0x0A pair
+# inside them and quietly corrupts the file.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.dll binary
+*.exe binary
+*.asar binary
+*.nip binary
+*.bin binary
+*.snapshot binary
+
+# Vite writes the committed bundle with LF. This repo is developed on Windows with
+# core.autocrlf=true, which checks those text files out as CRLF — so every
+# `npm run build` rewrote every line and made Exo/wwwroot show as fully modified,
+# burying the one asset hash that actually changed under whole-file diffs.
+Exo/wwwroot/index.html text eol=lf
+# The Vite template feeds wwwroot/index.html; without the same rule the source
+# checks out as CRLF under autocrlf=true and the build rewrites the shipped file.
+ui/index.html text eol=lf
+Exo/wwwroot/**/*.js text eol=lf
+Exo/wwwroot/**/*.css text eol=lf
+Exo/wwwroot/**/*.svg text eol=lf
+
+# The shipped PowerShell kits are SHA-256 hashed into ShippedScriptManifest.g.cs.
+# The manifest generator, the runtime verifier, and Ui.Smoke all canonicalise CRLF to
+# LF before hashing (Generate-ScriptManifest.ps1, ShippedScriptManifest.cs), so
+# integrity does not depend on checkout policy. Recorded here so the next person does
+# not have to rediscover why that normalisation exists before touching it.
+*.ps1 text
+
+# .editorconfig sets end_of_line = crlf and `dotnet format` gates it, but nothing
+# pinned the checkout: AmdNativeApply.cs and HardwareInventory.cs entered the index
+# as LF and stayed LF in the working tree, so `dotnet format --verify-no-changes`
+# was red with 511 ENDOFLINE errors in files nobody had touched. The index still
+# stores LF; this only fixes what lands on disk, on every platform.
+*.cs text eol=crlf

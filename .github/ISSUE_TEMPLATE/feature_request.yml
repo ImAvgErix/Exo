@@ -1,0 +1,56 @@
+name: Feature request
+description: Suggest an improvement
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Exo refuses tweaks it cannot measure, verify and undo — see
+        [docs/TWEAK-AUDIT.md](../../docs/TWEAK-AUDIT.md) and the evidence docs beside it. A
+        proposal that says what the change would *do to the machine* and how Exo could *prove*
+        it landed is much easier to accept than one that names a registry key.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What is painful, missing, or dishonest today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like Exo to do
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      multiple: true
+      options:
+        - "The orb / how it asks"
+        - "An existing module's tweaks"
+        - "A new module"
+        - "Detection and status honesty"
+        - "Repair / reversibility"
+        - "Installer and updates"
+        - "Docs"
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: |
+        For anything that changes a setting: what measurable effect does it have, and how would
+        Exo detect that it actually applied? Benchmarks, vendor documentation or a repro all help.
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Mockups, related issues, prior art.

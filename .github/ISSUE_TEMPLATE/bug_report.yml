@@ -1,0 +1,83 @@
+name: Bug report
+description: Something broke or looks wrong
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. The single most useful thing you can attach is
+        `%LocalAppData%\Exo\logs\exo-apply.log` — it records the machine, the module, every
+        step, and the result of the run. The orb's **Open logs** button takes you straight there.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      placeholder: What the orb said or did, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: Which part of Exo
+      description: Matches the modules the orb asks about.
+      options:
+        - "Not sure / the orb itself"
+        - "NVIDIA"
+        - "NVIDIA driver"
+        - "Your PC (system)"
+        - "Internet"
+        - "Discord"
+        - "Steam"
+        - "Games"
+        - "Brave"
+        - "Spotify"
+        - "Install / update"
+    validations:
+      required: true
+
+  - type: input
+    id: exo-version
+    attributes:
+      label: Exo version
+      description: The gear menu in the orb shows it.
+      placeholder: "4.4.2"
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version and build
+      description: Run `winver`.
+      placeholder: "24H2 26100.1742"
+    validations:
+      required: true
+
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU and driver version
+      description: Only needed for NVIDIA issues, but it never hurts.
+      placeholder: "RTX 3070, 32.0.16.1074"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Paste or attach `%LocalAppData%\Exo\logs\exo-apply.log`. It already contains the machine
+        details, so you do not need to gather anything else by hand.
+      render: text

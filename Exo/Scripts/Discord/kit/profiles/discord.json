@@ -1,0 +1,30 @@
+{
+  "_comment": "THE single owner of Discord host/boot flag values. Apply-DiscordProfile reads these through an explicit allow-list and never copies audio, tray, startup, window geometry, or in-app prefs. Do not hardcode any of these values in 40-DebloatWindows.ps1; the script owns conditional logic (SKIP_HOST_UPDATE gating) and nothing else.",
+  "SKIP_HOST_UPDATE": true,
+  "debugLogging": false,
+  "DESKTOP_TTI_REMOVE_V8_CACHE_CLEAR": true,
+  "DESKTOP_TTI_DNSTCP_WARMUP": true,
+  "DESKTOP_TTI_EARLY_UPDATE_CHECK": false,
+  "DESKTOP_TTI_UPDATE_BACKOFF_MAX_MS": 2000,
+  "DESKTOP_TTI_SPLASH_USE_WEBP": true,
+  "chromiumSwitches": {
+    "disable-breakpad": 1,
+    "disable-crash-reporter": 1,
+    "disable-domain-reliability": 1,
+    "disable-logging": 1,
+    "disable-component-update": 1,
+    "disable-background-networking": 1,
+    "no-pings": 1,
+    "disable-hang-monitor": 1,
+
+    "disable-client-side-phishing-detection": 1,
+    "disable-speech-api": 1,
+    "disable-sync": 1,
+    "no-default-browser-check": 1,
+    "no-service-autorun": 1,
+    "metrics-recording-only": 1,
+    "disable-features": "CalculateNativeWinOcclusion,InterestFeedContentSuggestions,TranslateUI",
+
+    "disable-background-timer-throttling": 1
+  }
+}

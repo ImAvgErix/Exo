@@ -1,0 +1,534 @@
+# Exo - detect Steam optimizer status (JSON for WinUI).
+#
+# READ THIS BEFORE FIXING A STEAM STATUS BUG HERE.
+#
+# The app does NOT run this script. OptimizerStateService.DetectSteamAsync calls
+# NativeLiveDetect.DetectSteam() directly - "Pure C# live probes - no PS detect" - and
+# WebHostBridge has no other source for the Steam tile. This file is still shipped, hashed
+# in ShippedScriptManifest, asserted by Test-Repository and Contracts.Smoke, and executed by
+# CI, which makes it an excellent oracle and a very convincing decoy: a fix made here passes
+# every gate, verifies green when you run it by hand, and changes nothing for a single user.
+#
+# That has already happened once. The "library games GPU on a single-GPU machine" rule was
+# corrected here while NativeLiveDetect.LiveSteamLibraryGpu kept demanding a GpuPreference=2
+# stamp that Apply deliberately deletes on that hardware, so the row stayed red on every
+# ordinary gaming desktop and the whole Steam tile stayed amber.
+#
+# If you change a rule in this file, change it in NativeLiveDetect.cs too, and make the
+# machine agree by running the app - not this script.
+#
+# Checklist mirrors Discord parity: quiet launch, RAM kernel, complete debloat,
+# Windows suppression, Start Menu path, verified record.
+# Classifiers: SteamDetectCore.ps1 (pure) - keep aligned with SteamLogic.cs
+$ErrorActionPreference = 'SilentlyContinue'
+
+$core = Join-Path $PSScriptRoot 'SteamDetectCore.ps1'
+if (-not (Test-Path -LiteralPath $core)) { throw "Missing SteamDetectCore.ps1 beside detect script" }
+. $core
+
+function Get-SteamInstallPath {
+    $candidates = @()
+    try {
+        $hkcu = Get-ItemProperty -Path 'HKCU:\Software\Valve\Steam' -ErrorAction SilentlyContinue
+        if ($hkcu.SteamPath) { $candidates += $hkcu.SteamPath }
+        if ($hkcu.SteamExe) {
+            $parent = Split-Path -Parent ([string]$hkcu.SteamExe)
+            if ($parent) { $candidates += $parent }
+        }
+    } catch { }
+    try {
+        $hklm = Get-ItemProperty -Path 'HKLM:\SOFTWARE\WOW6432Node\Valve\Steam' -ErrorAction SilentlyContinue
+        if ($hklm.InstallPath) { $candidates += $hklm.InstallPath }
+    } catch { }
+    try {
+        $hklm64 = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Valve\Steam' -ErrorAction SilentlyContinue
+        if ($hklm64.InstallPath) { $candidates += $hklm64.InstallPath }
+    } catch { }
+    $pf86 = [Environment]::GetFolderPath('ProgramFilesX86')
+    $pf = [Environment]::GetFolderPath('ProgramFiles')
+    if ($pf86) { $candidates += (Join-Path $pf86 'Steam') }
+    if ($pf) { $candidates += (Join-Path $pf 'Steam') }
+    foreach ($c in $candidates) {
+        if ($c -and (Test-Path -LiteralPath (Join-Path $c 'steam.exe'))) { return $c.TrimEnd('\', '/') }
+    }
+    return $null
+}
+
+function Add-Feature([string]$Title, [string]$Detail, [bool]$Active) {
+    $script:features.Add(@{
+        title  = $Title
+        detail = $Detail
+        active = $Active
+    })
+}
+
+function Test-SteamStartupQuiet {
+    foreach ($key in @(
+        'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run',
+        'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run',
+        'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run'
+    )) {
+        if (-not (Test-Path $key)) { continue }
+        try {
+            $item = Get-Item -Path $key -ErrorAction Stop
+            foreach ($name in @($item.GetValueNames())) {
+                if ([string]$item.GetValue($name) -match '(?i)steam\.exe' -or $name -match '(?i)^steam') {
+                    return $false
+                }
+            }
+        } catch { return $false }
+    }
+    try {
+        return [int](Get-ItemPropertyValue -Path 'HKCU:\Software\Valve\Steam' -Name 'StartupMode' -ErrorAction Stop) -eq 0
+    } catch { return $false }
+}
+
+function Test-SteamToastsOff {
+    $base = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
+    $ids = @('Steam', 'Valve.Steam', 'Valve.Steam.Client', 'com.valvesoftware.Steam', 'steam.exe')
+    $map = @{}
+    foreach ($id in $ids) {
+        $path = Join-Path $base $id
+        if (-not (Test-Path -LiteralPath $path)) { $map[$id] = $null; continue }
+        try {
+            $entry = Get-ItemProperty -Path $path -ErrorAction Stop
+            $prop = $entry.PSObject.Properties['Enabled']
+            if (-not $prop) { $map[$id] = $null }
+            else { $map[$id] = [int]$prop.Value }
+        } catch { $map[$id] = 1 }
+    }
+    return (Test-SteamToastsOffFromMap -Map $map)
+}
+
+function Test-SteamTrayQuiet([string]$SteamPath) {
+    $notifyKey = 'HKCU:\Control Panel\NotifyIconSettings'
+    if (-not (Test-Path $notifyKey)) { return $true }
+    $prefix = $null
+    try { $prefix = [IO.Path]::GetFullPath($SteamPath).TrimEnd('\') + '\' } catch { }
+    foreach ($key in @(Get-ChildItem -Path $notifyKey -ErrorAction SilentlyContinue)) {
+        $item = Get-Item -Path $key.PSPath -ErrorAction SilentlyContinue
+        if (-not $item) { continue }
+        $exe = [string]$item.GetValue('ExecutablePath')
+        if (-not $exe) { continue }
+        $isSteam = ($exe -match '(?i)[\\/]steam\.exe$' -or $exe -match '(?i)\\Steam\\')
+        if (-not $isSteam -and $prefix) {
+            try {
+                $full = [IO.Path]::GetFullPath($exe)
+                if ($full.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { $isSteam = $true }
+            } catch { }
+        }
+        if (-not $isSteam) { continue }
+        if ($item.GetValueNames() -notcontains 'IsPromoted' -or [int]$item.GetValue('IsPromoted') -ne 0) {
+            return $false
+        }
+    }
+    return $true
+}
+
+function Test-SteamScheduledTasksQuiet {
+    # Never full Get-ScheduledTask on detect (multi-second). Marker / soft true.
+    try {
+        $statePath = Join-Path $env:LOCALAPPDATA 'Exo\steam-optimizer.json'
+        if (Test-Path -LiteralPath $statePath) {
+            $st = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ($st.windowsVerified -eq $true -or $st.applyStatus -eq 'applied') { return $true }
+        }
+    } catch { }
+    return $true
+}
+
+function Test-SteamWindowsQuiet([string]$SteamPath) {
+    return (Test-SteamStartupQuiet) -and
+        (Test-SteamToastsOff) -and
+        (Test-SteamTrayQuiet $SteamPath) -and
+        (Test-SteamScheduledTasksQuiet)
+}
+
+function Test-VdfExpectations([string]$Raw, [object[]]$Expectations, [bool]$RequireObserved) {
+    $observed = 0
+    foreach ($pair in $Expectations) {
+        $matches = [regex]::Matches($Raw, '"' + [regex]::Escape([string]$pair.K) + '"\s+"([^"]*)"')
+        $observed += $matches.Count
+        foreach ($match in $matches) {
+            if ($match.Groups[1].Value -ne [string]$pair.V) { return $false }
+        }
+    }
+    return (-not $RequireObserved) -or $observed -gt 0
+}
+
+function Test-SteamDownloadConfig([string]$SteamPath) {
+    $path = Join-Path $SteamPath 'config\config.vdf'
+    if (-not (Test-Path -LiteralPath $path)) { return $false }
+    try {
+        $raw = Get-Content -LiteralPath $path -Raw -ErrorAction Stop
+        return Test-VdfExpectations $raw @(
+            @{ K = 'DownloadThrottleKbps'; V = '0' },
+            @{ K = 'ThrottleKbps'; V = '0' },
+            @{ K = 'RateLimitBps'; V = '0' },
+            @{ K = 'MaxSimDownloads'; V = '8' },
+            @{ K = 'AutoUpdateWindowEnabled'; V = '0' }
+        ) $false
+    } catch { return $false }
+}
+
+function Test-SteamClientTweaks([string]$SteamPath) {
+    $userdata = Join-Path $SteamPath 'userdata'
+    if (-not (Test-Path -LiteralPath $userdata)) { return $false }
+    try {
+        $files = @(Get-ChildItem -LiteralPath $userdata -Directory -ErrorAction Stop | ForEach-Object {
+            $path = Join-Path $_.FullName 'config\localconfig.vdf'
+            if (Test-Path -LiteralPath $path) { Get-Item -LiteralPath $path -ErrorAction Stop }
+        })
+        if ($files.Count -eq 0) { return $false }
+        $expectations = @(
+            @{ K = 'H264HWAccel'; V = '1' },
+            @{ K = 'GPUAccelWebViews'; V = '1' },
+            @{ K = 'GPUAccelWebViews2'; V = '1' },
+            @{ K = 'GPUAccelWebViewsD3D11'; V = '1' },
+            @{ K = 'LibraryLowBandwidthMode'; V = '1' },
+            @{ K = 'LibraryLowPerfMode'; V = '1' },
+            @{ K = 'SmoothScrollWebViews'; V = '0' },
+            @{ K = 'LibraryDisableCommunityContent'; V = '1' },
+            @{ K = 'InGameOverlayScreenshotNotification'; V = '0' },
+            @{ K = 'Controller_EnableChrome'; V = '0' },
+            @{ K = 'AllowDownloadsDuringGameplay'; V = '0' }
+        )
+        $observedAnywhere = $false
+        $anyExpectationKeyPresent = $false
+        foreach ($file in $files) {
+            $raw = Get-Content -LiteralPath $file.FullName -Raw -ErrorAction Stop
+            if (Test-VdfExpectations $raw $expectations $true) {
+                $observedAnywhere = $true
+            } elseif ($expectations | Where-Object { $raw -match ('"' + [regex]::Escape([string]$_.K) + '"') }) {
+                # Key exists but value is wrong - fail closed.
+                $anyExpectationKeyPresent = $true
+                return $false
+            }
+            if ($expectations | Where-Object { $raw -match ('"' + [regex]::Escape([string]$_.K) + '"') }) {
+                $anyExpectationKeyPresent = $true
+            }
+        }
+        # Soft-pass: modern Steam often has none of these keys; CEF launcher still optimizes UI.
+        if (-not $anyExpectationKeyPresent) { return $true }
+        return $observedAnywhere
+    } catch { return $false }
+}
+
+function Test-SteamClientHardwareAcceleration {
+    $key = 'HKCU:\Software\Valve\Steam'
+    if (-not (Test-Path $key)) { return $false }
+    try {
+        $item = Get-Item -Path $key -ErrorAction Stop
+        foreach ($name in @('H264HWAccel', 'GPUAccelWebViews', 'GPUAccelWebViewsV3')) {
+            if ($item.GetValueNames() -notcontains $name) { return $false }
+            if ([int]$item.GetValue($name, 0) -ne 1) { return $false }
+        }
+        return $true
+    } catch { return $false }
+}
+
+function Test-SteamCompleteClientDebloat([string]$SteamPath) {
+    if (-not $SteamPath -or -not (Test-Path -LiteralPath $SteamPath)) { return $false }
+
+    foreach ($f in @(
+        (Join-Path $SteamPath 'Steam-Exo-Aggressive.cmd'),
+        (Join-Path $SteamPath 'Steam-Exo-Lean.cmd'),
+        (Join-Path $SteamPath 'Steam-Exo-Legacy.cmd')
+    )) {
+        if (Test-Path -LiteralPath $f) { return $false }
+    }
+
+    foreach ($desktop in @(
+        [Environment]::GetFolderPath('Desktop'),
+        [Environment]::GetFolderPath('CommonDesktopDirectory')
+    )) {
+        if (-not $desktop -or -not (Test-Path -LiteralPath $desktop)) { continue }
+        $hits = @(Get-ChildItem -LiteralPath $desktop -Filter 'Steam*.lnk' -Force -ErrorAction SilentlyContinue)
+        if ($hits.Count -gt 0) { return $false }
+    }
+
+    foreach ($d in @(
+        (Join-Path $env:LOCALAPPDATA 'Steam\htmlcache\Crashpad'),
+        (Join-Path $env:LOCALAPPDATA 'Steam\Crashpad')
+    )) {
+        if (Test-Path -LiteralPath $d) {
+            $kids = @(Get-ChildItem -LiteralPath $d -Force -ErrorAction SilentlyContinue)
+            if ($kids.Count -gt 0) { return $false }
+        }
+    }
+
+    if (-not (Test-Path -LiteralPath (Join-Path $SteamPath 'Steam-Exo.cmd'))) { return $false }
+    return $true
+}
+
+function Test-SteamRuntimeIntegrity([string]$SteamPath) {
+    if (-not $SteamPath) { return $false }
+    if (-not (Test-Path -LiteralPath (Join-Path $SteamPath 'steam.exe'))) { return $false }
+    if (-not (Test-Path -LiteralPath (Join-Path $SteamPath 'bin'))) { return $false }
+    # Modern Steam ships steamwebhelper under bin\cef\cef.win*\steamwebhelper.exe
+    foreach ($h in @(
+        (Join-Path $SteamPath 'steamwebhelper.exe'),
+        (Join-Path $SteamPath 'bin\cef\cef.win64\steamwebhelper.exe'),
+        (Join-Path $SteamPath 'bin\cef\cef.win7x64\steamwebhelper.exe'),
+        (Join-Path $SteamPath 'bin\cef\cef.win7\steamwebhelper.exe')
+    )) {
+        if (Test-Path -LiteralPath $h) { return $true }
+    }
+    try {
+        $found = Get-ChildItem -LiteralPath (Join-Path $SteamPath 'bin') -Filter 'steamwebhelper.exe' -Recurse -ErrorAction Stop |
+            Select-Object -First 1
+        return [bool]$found
+    } catch { return $false }
+}
+
+function Test-SteamStartMenuLaunchPath([string]$SteamPath) {
+    if (-not $SteamPath) { return $false }
+    $cmdPath = Join-Path $SteamPath 'Steam-Exo.cmd'
+    if (-not (Test-Path -LiteralPath $cmdPath)) { return $false }
+
+    $candidates = @(
+        (Join-Path ([Environment]::GetFolderPath('Programs')) 'Steam\Steam.lnk'),
+        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Steam\Steam.lnk'),
+        (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Steam\Steam.lnk'),
+        (Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\Steam\Steam.lnk')
+    )
+
+    try {
+        $wsh = New-Object -ComObject WScript.Shell
+        foreach ($lnk in $candidates) {
+            if (-not (Test-Path -LiteralPath $lnk)) { continue }
+            try {
+                $sc = $wsh.CreateShortcut($lnk)
+                $target = [string]$sc.TargetPath
+                if ($target -and (
+                        $target -ieq $cmdPath -or
+                        $target -match '(?i)Steam-Exo\.cmd$'
+                    )) {
+                    return $true
+                }
+            } catch { }
+        }
+    } catch { }
+    return $false
+}
+
+$features = New-Object System.Collections.Generic.List[hashtable]
+$steam = Get-SteamInstallPath
+$statePath = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Exo\steam-optimizer.json'
+$state = $null
+if (Test-Path $statePath) {
+    try { $state = Get-Content $statePath -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
+}
+
+function Get-SteamLibrarySummary([string]$SteamPath) {
+    # Same language as Riot/Epic install rows: Installed - Found: -
+    $names = [System.Collections.Generic.List[string]]::new()
+    $count = 0
+    try {
+        $libs = [System.Collections.Generic.List[string]]::new()
+        [void]$libs.Add($SteamPath)
+        $vdf = Join-Path $SteamPath 'steamapps\libraryfolders.vdf'
+        if (Test-Path -LiteralPath $vdf) {
+            $raw = Get-Content -LiteralPath $vdf -Raw -ErrorAction Stop
+            foreach ($m in [regex]::Matches($raw, '"path"\s+"([^"]+)"')) {
+                $p = $m.Groups[1].Value -replace '\\\\', '\'
+                if ($p -and (Test-Path -LiteralPath $p -PathType Container)) { [void]$libs.Add($p) }
+            }
+        }
+        foreach ($lib in @($libs | Sort-Object -Unique)) {
+            $apps = Join-Path $lib 'steamapps'
+            if (-not (Test-Path -LiteralPath $apps -PathType Container)) { continue }
+            foreach ($acf in @(Get-ChildItem -LiteralPath $apps -Filter 'appmanifest_*.acf' -File -ErrorAction SilentlyContinue)) {
+                $count++
+                if ($names.Count -ge 4) { continue }
+                try {
+                    $text = Get-Content -LiteralPath $acf.FullName -Raw -ErrorAction Stop
+                    $nm = [regex]::Match($text, '"name"\s+"([^"]+)"')
+                    if ($nm.Success) {
+                        $label = $nm.Groups[1].Value.Trim()
+                        # Strip (R)/(TM)/unicode marks; fix Call of Dutyr mojibake
+                        $label = $label -replace '[\u00ae\u2122\u00a9]', ''
+                        $label = $label -replace '\(R\)|\(TM\)|\(C\)', ''
+                        $label = $label -replace '(?i)\bDutyr\b', 'Duty'
+                        $label = ($label -replace '\s+', ' ').Trim()
+                        # Skip redistributables / tooling so install row matches Riot/Epic real games.
+                        if ($label -match '(?i)redistributable|directx|vcredist|steamworks common|proton|steam linux') {
+                            $count--
+                            continue
+                        }
+                        if ($label -and $names -notcontains $label) { [void]$names.Add($label) }
+                    }
+                } catch { }
+            }
+        }
+    } catch { }
+    return @{ Count = $count; Names = @($names) }
+}
+
+$steamOk = [bool]$steam
+if (-not $steamOk) {
+    $statusText = 'Steam not installed'
+    $detail = 'Install Steam, open it once, then return.'
+    Add-Feature 'Steam installed' 'Install Steam, open it once, then return here to optimize.' $false
+} else {
+    $lib = Get-SteamLibrarySummary $steam
+    $installDetail = if ([int]$lib.Count -le 0) {
+        'Steam is ready  -  install a game, then Apply for the full library-aware pass.'
+    } elseif (@($lib.Names).Count -gt 0) {
+        $shown = @($lib.Names | Select-Object -First 4)
+        $tail = if ([int]$lib.Count -gt $shown.Count) { " +$([int]$lib.Count - $shown.Count) more" } else { '' }
+        "Ready with: $($shown -join ', ')$tail."
+    } else {
+        "Ready  -  $($lib.Count) library game(s) found."
+    }
+    Add-Feature 'Steam installed' $installDetail $true
+
+    # Quiet CEF launcher (SteamLogic / SteamDetectCore)
+    $cefOk = $false
+    $launcher = Join-Path $steam 'Steam-Exo.cmd'
+    if (Test-Path -LiteralPath $launcher) {
+        try {
+            $launcherText = Get-Content -LiteralPath $launcher -Raw -ErrorAction Stop
+            $cefOk = Test-SteamCefLauncherText -Text $launcherText
+        } catch { }
+    }
+    Add-Feature 'Fast quiet launch' 'Steam starts lean and high-priority  -  less chrome, quicker into your library and games.' $cefOk
+
+    # Client-only FSO + DSCP (never library games)
+    $fsoFlag = '~ DISABLEDXMAXIMIZEDWINDOWEDMODE'
+    $fsoOk = $false
+    $dscpOk = $false
+    try {
+        $fsoKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers')
+        $steamExe = Join-Path $steam 'steam.exe'
+        if ($fsoKey -and (Test-Path -LiteralPath $steamExe)) {
+            $fsoOk = [string]$fsoKey.GetValue($steamExe, '') -eq $fsoFlag
+        }
+        if ($fsoKey) { $fsoKey.Dispose() }
+    } catch { }
+    try {
+        $qosRoot = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\QoS'
+        $qosPath = Join-Path $qosRoot 'Exo-Steam-DSCP-steam.exe'
+        if (Test-Path -LiteralPath $qosPath) {
+            $policyOk = [string](Get-ItemPropertyValue -Path $qosPath -Name 'DSCP Value' -ErrorAction Stop) -eq '46'
+            # The policy existing is not the same as the marking working. Windows drops
+            # policy-based DSCP on any non-domain network - every home PC - unless
+            # "Do not use NLA" is 1. Checking only the policy key is why this row read green on
+            # a machine carrying 49 Steam QoS policies with the switch unset, none of which had
+            # ever marked a packet. Discord's detect already verifies the switch; this now does
+            # too, so the row means what it says.
+            $nlaOk = $false
+            $rootItem = Get-ItemProperty -LiteralPath $qosRoot -ErrorAction SilentlyContinue
+            if ($rootItem -and ($rootItem.PSObject.Properties.Name -contains 'Do not use NLA')) {
+                $nlaOk = ([string]$rootItem.'Do not use NLA' -eq '1')
+            }
+            $dscpOk = $policyOk -and $nlaOk
+        }
+    } catch { }
+    # Soft on purpose: a user who cannot elevate should not be stuck on a permanently red row
+    # for the half of this that needs admin. But the row covers two separate things, and with
+    # the OR it could describe both as done while only one was - so the detail says which.
+    $netDetail = if ($fsoOk -and $dscpOk) {
+        'Fullscreen Optimizations off on the Steam client, and UDP DSCP 46 marking is live for Steam traffic.'
+    } elseif ($fsoOk) {
+        'Fullscreen Optimizations off on the Steam client. DSCP marking is not active yet - an elevated Apply turns it on.'
+    } elseif ($dscpOk) {
+        'UDP DSCP 46 marking is live for Steam traffic. Fullscreen Optimizations are still on for the client.'
+    } else {
+        'Fullscreen Optimizations off on Steam client; UDP DSCP 46 for Steam traffic when elevated apply succeeds.'
+    }
+    Add-Feature 'Client FSO + priority net' $netDetail ($fsoOk -or $dscpOk)
+
+    # Marker only on detect - live library EXE scan is multi-second on large libraries.
+    # StrictMode-safe: older steam-optimizer.json lacks libraryGamePolicyVerified.
+    $libGamesOk = $false
+    try {
+        if ($state -and ($state.PSObject.Properties.Name -contains 'libraryGamePolicyVerified')) {
+            $libGamesOk = [bool]$state.libraryGamePolicyVerified
+        }
+    } catch { $libGamesOk = $false }
+    Add-Feature 'Library games high-perf GPU' 'Installed Steam games get high-perf GPU preference and DSCP priority (display = Games hub borderless). Windows policy only, game files untouched.' $libGamesOk
+
+    # Memory-guard template is optional (never launched - zero always-on helpers).
+    # Green when lean CEF launcher is present, matching native C# detect.
+    # Durable quiet re-enforce lives in Reinstate-SteamQuiet when a template is present.
+    $helper = Join-Path $steam 'Exo-SteamMemoryGuard.ps1'
+    $yieldOk = [bool]$cefOk
+    Add-Feature 'Yield to your game' $(if ($cefOk) {
+            'No background guard - lean Steam-Exo.cmd only (zero idle processes).'
+        } else {
+            'Apply Steam to install Steam-Exo.cmd (no background helper).'
+        }) $yieldOk
+
+    # LIVE checks only - never require a successful state marker (failed/incomplete applies
+    # were turning real greens into reds: "5 need Apply" while CEF/hardware already on).
+    $debloatOk = Test-SteamCompleteClientDebloat $steam
+    $dlOk = Test-SteamDownloadConfig $steam
+    # Debloat is the main cleaner row; download config is bonus when present.
+    # If config.vdf missing, still allow green when disk debloat is clean.
+    $cfgPath = Join-Path $steam 'config\config.vdf'
+    $debloatCombined = if ($debloatOk) {
+        if (-not (Test-Path -LiteralPath $cfgPath)) { $true }
+        else { [bool]$dlOk }
+    } else { $false }
+    Add-Feature 'Cleaner Steam install' 'Caches and leftovers cleared. Your games and shader caches stay untouched.' $debloatCombined
+
+    $snapOk = Test-SteamClientTweaks $steam
+    Add-Feature 'Snappier library & overlay' 'Library UI feels lighter and the overlay stays quieter in the background.' $snapOk
+
+    $hardwareOk = Test-SteamClientHardwareAcceleration
+    Add-Feature 'GPU-powered Steam UI' 'Steam web UI uses your GPU so the client stays smooth instead of burning CPU on software paint.' $hardwareOk
+
+    $windowsQuietOk = Test-SteamWindowsQuiet $steam
+    Add-Feature 'Silent Windows integration' 'No Steam autostart spam, no toast clutter, tray stays out of the way.' $windowsQuietOk
+
+    # Host Game Mode / HAGS / Game Bar live on the Windows card only.
+
+    $launchOk = Test-SteamStartMenuLaunchPath $steam
+    Add-Feature 'Clean Start Menu launch' 'Start Menu opens the Exo quiet Steam launcher  -  no desktop icon spam.' $launchOk
+
+    $runtimeOk = Test-SteamRuntimeIntegrity $steam
+    Add-Feature 'Helpers stay healthy' 'steam.exe + Steam-Exo.cmd on disk (no background process).' ($runtimeOk -and $cefOk)
+
+    # Trust apply flags - do NOT pin exact kit version strings (1.7.3+ was falsely "incomplete").
+    # Memory-guard template is optional - do not fail-closed when absent/unused.
+    $markerOk = Test-SteamApplyRecord -State $state
+    Add-Feature 'Optimization verified' 'This PC has a completed Steam apply on record with durable quiet policy intact.' ($markerOk -and $runtimeOk)
+
+    # Client FSO/DSCP + library policy are part of full apply when elevated.
+    # Do not require unused memory-guard template for applied status.
+    $clientNetOk = [bool]($fsoOk -or $dscpOk)
+    $isApplied = $steamOk -and $markerOk -and $cefOk -and $debloatOk -and
+        $runtimeOk -and $dlOk -and $snapOk -and $hardwareOk -and $windowsQuietOk -and $launchOk -and
+        $clientNetOk -and $libGamesOk
+
+    # Status from ALL inactive checklist rows (matches UI) - exclude Optimization verified.
+    $missingAll = @()
+    foreach ($f in @($script:features)) {
+        $t = [string]$f.title
+        if ($t -eq 'Optimization verified') { continue }
+        if (-not [bool]$f.active) { $missingAll += $t }
+    }
+    $statusText = if ($isApplied) { 'Already optimized' }
+    elseif ($missingAll.Count -eq 1) { "1 setting needs Apply ($($missingAll[0]))" }
+    elseif ($missingAll.Count -gt 1) { "$($missingAll.Count) settings need Apply" }
+    else { 'Ready to optimize' }
+    $detail = if ($isApplied) {
+        'Hardware-accelerated CEF, debloat, Windows quiet, library GPU/FSO, in-game yield, and quiet launch are active.'
+    } elseif ($missingAll.Count -gt 0) {
+        'Off: ' + ($missingAll -join ', ') + '.'
+    } else {
+        'Run Apply to finish the checklist below.'
+    }
+}
+
+if (-not $steamOk) {
+    $isApplied = $false
+}
+
+[ordered]@{
+    isApplied  = [bool]$isApplied
+    statusText = $statusText
+    detail     = $detail
+    features   = @($features)
+} | ConvertTo-Json -Compress -Depth 5

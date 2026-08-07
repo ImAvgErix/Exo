@@ -1,0 +1,92 @@
+{
+  "_comment": "Per-plugin OPTIONS and global Equicord settings only. lean-plugin-policy.json is the single owner of which plugins are enabled; any 'enabled' key in this file is ignored by the writer. Safety keys (eagerPatches, enableReactDevtools, cloud) are clamped in code and deliberately absent here. Only plugins the policy enables (or the manifests require) belong in 'plugins'.",
+  "enabledThemes": ["amoled-cord.theme.css"],
+  "useQuickCss": true,
+  "autoUpdate": false,
+  "autoUpdateNotification": false,
+  "enableOnlineThemes": false,
+  "notifications": {
+    "timeout": 3000,
+    "position": "bottom-right",
+    "useNative": "never",
+    "missed": false,
+    "logLimit": 10
+  },
+  "plugins": {
+    "NoTrack": { "disableAnalytics": true },
+    "CrashHandler": {
+      "attemptToPreventCrashes": true,
+      "attemptToNavigateToHome": false
+    },
+    "ConsoleJanitor": {
+      "disableDiscordLogger": true,
+      "disableSpotifyLogger": true
+    },
+    "SilentTyping": {
+      "defaultHidden": true,
+      "enabledGlobally": true,
+      "hideChatBoxTypingIndicators": true,
+      "hideMembersListTypingIndicators": true,
+      "chatIcon": false,
+      "chatContextMenu": false
+    },
+    "IgnoreActivities": {
+      "ignorePlaying": true,
+      "ignoreListening": true,
+      "ignoreStreaming": true,
+      "ignoreWatching": true,
+      "ignoreCompeting": true,
+      "listMode": 0,
+      "idsList": ""
+    },
+    "Declutter": {
+      "removeQuestsAboveDms": true,
+      "removeServerBoostInfo": true,
+      "removeNameplate": true,
+      "removeGiftButton": true,
+      "removeShopAboveDms": true,
+      "removeUnavailableEmojiPicker": true,
+      "removeButtonTooltips": true,
+      "removeBillingSettings": true,
+      "removeClanTag": true,
+      "removeProfileEffect": true,
+      "removeAvatarDecoration": true,
+      "removeAudioMenus": true,
+      "alwaysShowUsername": false
+    },
+    "HideChatButtons": { "color": false, "open": false },
+    "EquicordHelper": {
+      "disableAdoptTagPrompt": true,
+      "noModalAnimation": true,
+      "removeActivitySection": true
+    },
+    "NoPendingCount": {
+      "hideMessageRequestsCount": true,
+      "hidePremiumOffersCount": true,
+      "hideFriendRequestsCount": true
+    },
+    "OnePingPerDM": {
+      "allowMentions": false,
+      "allowEveryone": false
+    },
+    "NotificationVolume": { "notificationVolume": 25 },
+    "Settings": {
+      "settingsLocation": "aboveNitro",
+      "includeVencordInfoWhenCopying": false
+    },
+    "FakeNitro": {
+      "enableEmojiBypass": true,
+      "enableStickerBypass": true,
+      "enableStreamQualityBypass": true,
+      "transformEmojis": true,
+      "transformStickers": true,
+      "transformCompoundSentence": false,
+      "useHyperLinks": true,
+      "disableEmbedPermissionCheck": false
+    },
+    "LimitlessScreenshare": {
+      "maxResolution": 1440,
+      "maxFPS": 60
+    }
+  }
+}

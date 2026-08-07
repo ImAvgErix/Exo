@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <FontFamily x:Key="ExoDisplayFont">Segoe UI Variable Display</FontFamily>
+    <FontFamily x:Key="ExoUiFont">Segoe UI Variable Text</FontFamily>
+    <FontFamily x:Key="ExoUiFontMedium">Segoe UI Variable Text</FontFamily>
+    <FontFamily x:Key="ExoUiFontSemiBold">Segoe UI Variable Display</FontFamily>
+
+    <x:Double x:Key="ExoTypeCaptionSize">12</x:Double>
+    <x:Double x:Key="ExoTypeCaptionLineHeight">16</x:Double>
+    <x:Double x:Key="ExoTypeBodySize">14</x:Double>
+    <x:Double x:Key="ExoTypeBodyLineHeight">20</x:Double>
+    <x:Double x:Key="ExoTypeBodyLargeSize">18</x:Double>
+    <x:Double x:Key="ExoTypeBodyLargeLineHeight">24</x:Double>
+    <x:Double x:Key="ExoTypeSubtitleSize">20</x:Double>
+    <x:Double x:Key="ExoTypeSubtitleLineHeight">28</x:Double>
+    <x:Double x:Key="ExoTypeTitleSize">28</x:Double>
+    <x:Double x:Key="ExoTypeTitleLineHeight">36</x:Double>
+    <x:Double x:Key="ExoTypeTitleLargeSize">40</x:Double>
+    <x:Double x:Key="ExoTypeTitleLargeLineHeight">52</x:Double>
+</ResourceDictionary>

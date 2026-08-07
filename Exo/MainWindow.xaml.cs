@@ -1,0 +1,598 @@
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using Exo.Helpers;
+using Exo.Services;
+using Microsoft.UI;
+using Microsoft.UI.Windowing;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.Web.WebView2.Core;
+using Windows.Graphics;
+using WinRT.Interop;
+
+namespace Exo;
+
+/// <summary>
+/// Thin native shell: fixed window + WebView2 product UI.
+/// Optimizers stay C#/PS via <see cref="WebHostBridge"/>.
+/// </summary>
+public sealed partial class MainWindow : Window
+{
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(nint hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShowWindow(nint hWnd, int command);
+
+    private const int ShowRestore = 9;
+    // Fixed design canvas for the AMOLED shell — not resizable. CSS layout is authored
+    // against these logical pixels so every meter/module page fits with zero scroll.
+    private const int FixedWindowWidth = 1400;
+    private const int FixedWindowHeight = 900;
+    private const int MinimumWindowWidth = FixedWindowWidth;
+    private const int MinimumWindowHeight = FixedWindowHeight;
+
+    private readonly CancellationTokenSource _lifetimeCts = new();
+    private WebHostBridge? _bridge;
+    private bool _firstFrameMarked;
+    private bool _webReady;
+    /// <summary>
+    /// Single-flight for web init. RootGrid.Loaded and Activated both call EnsureWebAsync;
+    /// without this, two concurrent inits each Attach() a bridge → every shell.openUrl runs twice.
+    /// </summary>
+    private Task? _ensureWebTask;
+    private bool _homeBootstrapped;
+    private bool _postFirstFrameWorkStarted;
+    private bool _stickySafeMode;
+
+    public MainWindow()
+    {
+        StartupLog.Mark("main-window-ctor");
+        ExoMotion.MotionDisabled = true;
+        _stickySafeMode = StartupLog.PreviousLaunchDiedBeforeFirstFrame;
+        if (_stickySafeMode)
+            StartupLog.Mark("safe-mode-motion-off");
+
+        InitializeComponent();
+        StartupLog.Mark("main-window-xaml-loaded");
+        App.MainAppWindow = this;
+
+        Microsoft.UI.Xaml.Media.CompositionTarget.Rendered += OnFirstFrameRendered;
+
+        try
+        {
+            ApplyResponsiveWindowChrome();
+            ApplyInitialWindowBounds();
+            TryCenterOnScreen();
+            TrySetWindowIcon();
+        }
+        catch { StartupLog.Mark("chrome-setup-partial"); }
+
+        // React paints the one visible caption. WinUI keeps the resize border and
+        // a bounded drag region, but does not paint a second title bar/button set.
+        ExtendsContentIntoTitleBar = true;
+        try
+        {
+            if (AppWindow.Presenter is OverlappedPresenter op)
+                op.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: false);
+        }
+        catch { /* best-effort on older presenters */ }
+
+        // Keep the system caption metadata transparent as a defensive fallback.
+        // The presenter above hides its buttons in the normal Windows 11 path.
+        try
+        {
+            var tb = AppWindow.TitleBar;
+            tb.ExtendsContentIntoTitleBar = true;
+            tb.IconShowOptions = IconShowOptions.HideIconAndSystemMenu;
+            var transparent = Windows.UI.Color.FromArgb(0, 0, 0, 0);
+            var black = Windows.UI.Color.FromArgb(255, 0, 0, 0);
+            var ink = Windows.UI.Color.FromArgb(255, 233, 233, 236);
+            var dim = Windows.UI.Color.FromArgb(255, 106, 106, 112);
+            var hover = Windows.UI.Color.FromArgb(255, 26, 26, 31);
+            // Extend mode: the app content paints behind the caption, so the
+            // BACKGROUND colors are moot and the caption BUTTON backgrounds must
+            // be transparent — otherwise the min/close cells render as a light
+            // strip over the black orb. That was the 4.2.1 white-bar symptom.
+            tb.BackgroundColor = black;
+            tb.InactiveBackgroundColor = black;
+            tb.ForegroundColor = ink;
+            tb.InactiveForegroundColor = dim;
+            tb.ButtonBackgroundColor = transparent;
+            tb.ButtonInactiveBackgroundColor = transparent;
+            tb.ButtonForegroundColor = ink;
+            tb.ButtonInactiveForegroundColor = dim;
+            tb.ButtonHoverBackgroundColor = hover;
+            tb.ButtonHoverForegroundColor = ink;
+            tb.ButtonPressedBackgroundColor = hover;
+            tb.ButtonPressedForegroundColor = ink;
+        }
+        catch { StartupLog.Mark("titlebar-theme-skip"); }
+
+        // Reserve only the quiet middle of the React glass rail for native drag.
+        try { SetTitleBar(AppTitleBar); }
+        catch { StartupLog.Mark("titlebar-drag-skip"); }
+
+        AppWindow.Changed += (_, args) =>
+        {
+            if (args.DidPresenterChange)
+                ApplyResponsiveWindowChrome();
+        };
+
+        RootGrid.Loaded += async (_, _) =>
+        {
+            ApplyResponsiveWindowChrome();
+            SyncContentHostWidth();
+            await EnsureWebAsync();
+            BootstrapHomeOnce("root-loaded");
+        };
+        RootGrid.ActualThemeChanged += (_, _) => ApplyShellChrome();
+        Activated += OnFirstActivationBootstrap;
+        Closed += (_, _) =>
+        {
+            _lifetimeCts.Cancel();
+            try { _bridge?.Detach(); } catch { }
+            App.Services.Settings.Flush();
+            App.MainAppWindow = null;
+        };
+
+        ApplyShellChrome();
+        StartupLog.Mark("main-window-ctor-done");
+    }
+
+    private void OnFirstFrameRendered(object? sender, Microsoft.UI.Xaml.Media.RenderedEventArgs e)
+    {
+        if (_firstFrameMarked) return;
+        _firstFrameMarked = true;
+        try { Microsoft.UI.Xaml.Media.CompositionTarget.Rendered -= OnFirstFrameRendered; } catch { }
+        StartupLog.Mark(StartupLog.FirstFrameMarker);
+
+        if (!_stickySafeMode)
+        {
+            ExoMotion.MotionDisabled = false;
+            StartupLog.Mark("boot-motion-enabled");
+        }
+
+        StartPostFirstFrameWork();
+    }
+
+    private void OnFirstActivationBootstrap(object sender, WindowActivatedEventArgs e)
+    {
+        if (e.WindowActivationState == WindowActivationState.Deactivated) return;
+        BootstrapHomeOnce("window-activated");
+        _ = EnsureWebAsync();
+    }
+
+    private void BootstrapHomeOnce(string reason)
+    {
+        if (_homeBootstrapped) return;
+        _homeBootstrapped = true;
+        StartupLog.Mark("bootstrap-home:" + reason);
+        NavigateHome(suppressTransition: true);
+    }
+
+    private void StartPostFirstFrameWork()
+    {
+        if (_postFirstFrameWorkStarted) return;
+        _postFirstFrameWorkStarted = true;
+        try { App.Services.WarmInBackground(); } catch { }
+        // Update consent lives entirely in the React brain now (it asks "a newer
+        // me is out — want me to install it?"). The old native ContentDialog
+        // pop-up was a second, redundant prompt from the pre-orb UI — removed.
+    }
+
+    public void BringToForeground()
+    {
+        try
+        {
+            var hWnd = WindowNative.GetWindowHandle(this);
+            _ = ShowWindow(hWnd, ShowRestore);
+            _ = SetForegroundWindow(hWnd);
+            Activate();
+        }
+        catch { }
+    }
+
+    private Task EnsureWebAsync()
+    {
+        if (_webReady) return Task.CompletedTask;
+        // Single-flight: Loaded + Activated race must not double-Attach the bridge.
+        return _ensureWebTask ??= EnsureWebCoreAsync();
+    }
+
+    private async Task EnsureWebCoreAsync()
+    {
+        if (_webReady) return;
+        ShowBootPanel("Starting Exo…");
+        try
+        {
+            // 1) Prefer the bundled runtime. 2) If it fails to init, fall back to
+            //    the system runtime — a bad or absent bundle must never leave a
+            //    machine whose own runtime is fine worse off than before. 3) If
+            //    that also fails, repair the system runtime and retry once.
+            if (!await TryInitCoreAsync(useBundled: true))
+            {
+                StartupLog.Mark("webview2-bundled-init-failed-falling-back");
+                if (!await TryInitCoreAsync(useBundled: false))
+                {
+                    StartupLog.Mark("webview2-init-failed-repairing");
+                    ShowBootPanel("Preparing the display runtime…");
+                    await WebView2Doctor.TryRepairAsync(_lifetimeCts.Token);
+                    if (!await TryInitCoreAsync(useBundled: false))
+                    {
+                        // If the runtime is now present but this already-running
+                        // process can't bind to it, a relaunch usually finishes the job.
+                        ShowWebFallback(runtimeNowHealthy: WebView2Doctor.IsHealthy());
+                        _ensureWebTask = null;
+                        return;
+                    }
+                }
+            }
+
+            var core = WebHost.CoreWebView2!;
+
+            // Attach before navigating so both the real page and the dev
+            // diagnostic page below reveal the WebView on a successful load.
+            core.NavigationCompleted += (_, args) =>
+            {
+                if (args.IsSuccess)
+                {
+                    StartupLog.Mark("web-nav-ok");
+                    RevealWeb();
+                }
+                else
+                {
+                    StartupLog.Mark("web-nav-fail:" + args.WebErrorStatus);
+                    ShowWebFallback(runtimeNowHealthy: true);
+                }
+            };
+
+            var www = ResolveWwwRoot();
+            if (www is null || !Directory.Exists(www))
+            {
+                StartupLog.Mark("wwwroot-missing");
+                // Dev fallback: show a tiny diagnostic page.
+                core.NavigateToString(
+                    "<html><body style='background:#050506;color:#fff;font-family:Segoe UI;padding:24px'>" +
+                    "<h2>Exo UI not built</h2><p>Run: <code>cd ui &amp;&amp; npm run build</code></p></body></html>");
+                _webReady = true;
+                return;
+            }
+
+            core.Settings.IsStatusBarEnabled = false;
+            core.Settings.AreDefaultContextMenusEnabled = false;
+            core.Settings.IsZoomControlEnabled = false;
+#if DEBUG
+            // Local development only: the shipped app never exposes DevTools to
+            // the WebView content, which is the UI's only script execution surface.
+            try { core.Settings.AreDevToolsEnabled = true; } catch { }
+#else
+            core.Settings.AreDevToolsEnabled = false;
+#endif
+
+            core.SetVirtualHostNameToFolderMapping(
+                "app.exo.local",
+                www,
+                CoreWebView2HostResourceAccessKind.Allow);
+
+            // Replace any prior bridge so WebMessageReceived never stacks handlers.
+            try { _bridge?.Detach(); } catch { }
+            _bridge = new WebHostBridge(App.Services, DispatcherQueue);
+            _bridge.Attach(core);
+
+            WebHost.Source = new Uri("https://app.exo.local/index.html");
+            _webReady = true;
+            StartupLog.Mark("web-host-ready");
+        }
+        catch (Exception ex)
+        {
+            // Allow a later call to retry if CoreWebView2 init failed mid-flight.
+            _ensureWebTask = null;
+            StartupLog.Mark("web-host-failed:" + ex.GetType().Name);
+            ShowWebFallback(runtimeNowHealthy: WebView2Doctor.IsHealthy());
+        }
+    }
+
+    /// <summary>
+    /// Initializes CoreWebView2. When <paramref name="useBundled"/> is true and a
+    /// runtime is bundled inside the app (Runtime\WebView2), WebView2 is pointed at
+    /// it via the documented WEBVIEW2_BROWSER_EXECUTABLE_FOLDER env var so a missing
+    /// or corrupted system runtime can't black-screen the UI. When false (the
+    /// fallback attempt), the override is cleared so WebView2 uses the machine's
+    /// system Evergreen runtime — this is what makes a bad/absent bundle safe: it
+    /// can never leave a machine whose own runtime is fine worse off. The env var
+    /// is read by EnsureCoreWebView2Async when it creates the environment; a prior
+    /// failed attempt created none, so switching the var between attempts takes
+    /// effect. Using the env var avoids CoreWebView2Environment.CreateAsync (its
+    /// overloads differ across the WebView2 projection).
+    /// </summary>
+    private async Task<bool> TryInitCoreAsync(bool useBundled)
+    {
+        try
+        {
+            var bundled = useBundled ? WebView2Doctor.ResolveBundledRuntimeFolder() : null;
+            // A null value removes the variable, so the fallback attempt uses the
+            // system runtime; a non-null value pins the bundled runtime.
+            Environment.SetEnvironmentVariable("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", bundled);
+            if (bundled is not null)
+                StartupLog.Mark("webview2-bundled-runtime");
+
+            await WebHost.EnsureCoreWebView2Async();
+            return WebHost.CoreWebView2 is not null;
+        }
+        catch (Exception ex)
+        {
+            StartupLog.Mark("webview2-init-fail:" + ex.GetType().Name);
+            return false;
+        }
+    }
+
+    private void ShowBootPanel(string text)
+    {
+        WebBootText.Text = text;
+        WebBootPanel.Visibility = Visibility.Visible;
+        WebViewFallback.Visibility = Visibility.Collapsed;
+        WebHost.Visibility = Visibility.Collapsed;
+    }
+
+    private void RevealWeb()
+    {
+        WebBootPanel.Visibility = Visibility.Collapsed;
+        WebViewFallback.Visibility = Visibility.Collapsed;
+        WebHost.Visibility = Visibility.Visible;
+
+        // Startup heartbeat for the updater's rollback: the SFX installs a new build,
+        // launches it, and waits for this marker before deleting its .old-* backup.
+        // First successful web navigation is "the app really started" — a build that
+        // crashes before this never writes the marker and the previous version is restored.
+        try
+        {
+            var appDir = AppContext.BaseDirectory;
+            if (!string.IsNullOrWhiteSpace(appDir))
+            {
+                var marker = System.IO.Path.Combine(appDir, "app.started");
+                System.IO.File.WriteAllText(marker, DateTimeOffset.UtcNow.ToString("o"));
+            }
+        }
+        catch { /* heartbeat is best-effort */ }
+    }
+
+    private void ShowWebFallback(bool runtimeNowHealthy)
+    {
+        WebBootPanel.Visibility = Visibility.Collapsed;
+        WebHost.Visibility = Visibility.Collapsed;
+        if (runtimeNowHealthy)
+        {
+            WebViewFallbackTitle.Text = "Almost there — restart Exo";
+            WebViewFallbackBody.Text =
+                "Exo just set up the WebView2 display runtime. Restart the app to finish loading the interface.";
+        }
+        else
+        {
+            WebViewFallbackTitle.Text = "Exo couldn't start its UI runtime";
+            WebViewFallbackBody.Text =
+                "The WebView2 Runtime looks corrupted and Exo's automatic repair didn't fix it. Install it from Microsoft, then reopen Exo.";
+        }
+        WebViewFallback.Visibility = Visibility.Visible;
+    }
+
+    private void WebViewRestartButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var exe = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(exe))
+                Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
+        }
+        catch { }
+        try { Microsoft.UI.Xaml.Application.Current?.Exit(); } catch { }
+    }
+
+    private void WebViewFallbackButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo("https://go.microsoft.com/fwlink/p/?LinkId=2124703")
+            {
+                UseShellExecute = true,
+            });
+        }
+        catch { }
+    }
+
+    private static string? ResolveWwwRoot()
+    {
+        var baseDir = AppContext.BaseDirectory;
+        var candidates = new[]
+        {
+            Path.Combine(baseDir, "wwwroot"),
+            Path.Combine(baseDir, "ui"),
+            Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "wwwroot")),
+        };
+        foreach (var c in candidates)
+        {
+            if (Directory.Exists(c) && File.Exists(Path.Combine(c, "index.html")))
+                return c;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Ensure the web view is up and point it at <paramref name="hash"/>. The orb UI has no
+    /// router, so this only ever needs the root — the per-module deep links it used to serve
+    /// pointed at routes that no longer exist.
+    /// </summary>
+    private async Task NavigateWebHashAsync(string hash)
+    {
+        try
+        {
+            await EnsureWebAsync();
+            if (WebHost.CoreWebView2 is null) return;
+            var script = $"window.location.hash = {System.Text.Json.JsonSerializer.Serialize(hash)};";
+            await WebHost.CoreWebView2.ExecuteScriptAsync(script);
+        }
+        catch (Exception ex)
+        {
+            // Was `async void` + swallow-all: an exception here could not be observed by the
+            // caller and would tear down the process rather than the navigation.
+            StartupLog.Mark("web-navigate-failed:" + ex.GetType().Name);
+        }
+    }
+
+    public void NavigateHome(bool suppressTransition = false) => _ = NavigateWebHashAsync("#/");
+
+    public void StabilizeShellAfterExternalWork()
+    {
+        try { ApplyResponsiveWindowChrome(); }
+        catch { }
+    }
+
+    private void ApplyResponsiveWindowChrome()
+    {
+        if (AppWindow.Presenter is OverlappedPresenter presenter)
+        {
+            // Forced fixed canvas: the product UI is authored to 1400×900 with no scroll.
+            presenter.IsMaximizable = false;
+            presenter.IsResizable = false;
+            presenter.IsMinimizable = true;
+            presenter.PreferredMinimumWidth = MinimumWindowWidth;
+            presenter.PreferredMinimumHeight = MinimumWindowHeight;
+            try
+            {
+                // Cap max to the same size when the API is available so the window cannot grow.
+                presenter.PreferredMaximumWidth = FixedWindowWidth;
+                presenter.PreferredMaximumHeight = FixedWindowHeight;
+            }
+            catch { /* older presenter projections */ }
+            try { presenter.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: false); }
+            catch { }
+        }
+    }
+
+    /// <summary>
+    /// AppWindow.Resize takes PHYSICAL pixels, and FixedWindowWidth/Height are the layout
+    /// size the UI was designed against. Passing them straight through meant the window only
+    /// matched the design at 100% scaling: at Windows' very common 125% the WebView viewport
+    /// was ~960x640 CSS px, and at 150% ~800x533. The conversation band is the bottom 37% of
+    /// that, so on a scaled display it lost roughly a third of its height and started clipping
+    /// its own buttons. Scale by the monitor's DPI so every user gets the same room.
+    /// </summary>
+    private void ApplyInitialWindowBounds()
+    {
+        try
+        {
+            var scale = 1.0;
+            try
+            {
+                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+                var dpi = GetDpiForWindow(hwnd);
+                if (dpi > 0) scale = dpi / 96.0;
+            }
+            catch { /* fall back to 1.0 — never worse than the old behaviour */ }
+
+            var w = (int)Math.Round(FixedWindowWidth * scale);
+            var h = (int)Math.Round(FixedWindowHeight * scale);
+
+            // Never demand more than the monitor actually has, or the window is born with its
+            // bottom off-screen — which hides the same buttons by a different route.
+            try
+            {
+                var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest);
+                if (area is not null)
+                {
+                    w = Math.Min(w, area.WorkArea.Width);
+                    h = Math.Min(h, area.WorkArea.Height);
+                }
+            }
+            catch { }
+
+            AppWindow.Resize(new SizeInt32(w, h));
+        }
+        catch { }
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
+
+    private void ApplyShellChrome() => App.Services.Theme.Apply();
+
+    private void TryCenterOnScreen()
+    {
+        try
+        {
+            var hwnd = WindowNative.GetWindowHandle(this);
+            var id = Win32Interop.GetWindowIdFromWindow(hwnd);
+            var appWindow = AppWindow.GetFromWindowId(id);
+            var display = DisplayArea.GetFromWindowId(id, DisplayAreaFallback.Nearest);
+            if (display is null) return;
+            var work = display.WorkArea;
+            var x = work.X + (work.Width - appWindow.Size.Width) / 2;
+            var y = work.Y + (work.Height - appWindow.Size.Height) / 2;
+            appWindow.Move(new PointInt32(x, y));
+        }
+        catch { }
+    }
+
+    private void RootGrid_SizeChanged(object sender, SizeChangedEventArgs e) => SyncContentHostWidth();
+
+    private void SyncContentHostWidth()
+    {
+        try
+        {
+            if (ContentHost is null) return;
+            ContentHost.ClearValue(FrameworkElement.WidthProperty);
+            ContentHost.ClearValue(FrameworkElement.MaxWidthProperty);
+            ContentHost.HorizontalAlignment = HorizontalAlignment.Stretch;
+        }
+        catch { }
+    }
+
+    private void TrySetWindowIcon()
+    {
+        try
+        {
+            var icoPath = ResolveAppIconPath();
+            if (icoPath is null) return;
+            try { AppWindow.SetIcon(icoPath); } catch { }
+
+            var hwnd = WindowNative.GetWindowHandle(this);
+            if (hwnd == IntPtr.Zero) return;
+            const uint imageIcon = 1;
+            const int lrLoadFromFile = 0x0010;
+            const int wmSetIcon = 0x0080;
+            var big = LoadImage(IntPtr.Zero, icoPath, imageIcon, 32, 32, lrLoadFromFile);
+            var small = LoadImage(IntPtr.Zero, icoPath, imageIcon, 16, 16, lrLoadFromFile);
+            if (big != IntPtr.Zero) SendMessage(hwnd, wmSetIcon, new IntPtr(1), big);
+            if (small != IntPtr.Zero) SendMessage(hwnd, wmSetIcon, new IntPtr(0), small);
+        }
+        catch { }
+    }
+
+    private static string? ResolveAppIconPath()
+    {
+        var baseDir = AppContext.BaseDirectory;
+        var assets = Path.Combine(baseDir, "Assets", "Exo.ico");
+        var root = Path.Combine(baseDir, "Exo.ico");
+        try
+        {
+            if (File.Exists(assets))
+            {
+                File.Copy(assets, root, true);
+                return root;
+            }
+        }
+        catch
+        {
+            if (File.Exists(assets)) return assets;
+        }
+        return File.Exists(root) ? root : (File.Exists(assets) ? assets : null);
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr LoadImage(IntPtr hInst, string name, uint type, int cx, int cy, int fuLoad);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+}

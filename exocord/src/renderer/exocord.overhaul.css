@@ -1,0 +1,371 @@
+/**
+ * Exocord visual overhaul.
+ *
+ * Structural behavior stays in Exocore/toprail. This final layer owns the
+ * product language: solid AMOLED surfaces, violet state, rounded-square place
+ * icons, card rows, quiet borders and no Discord mask holes or double tooltips.
+ * No blur, filters or layout animation: the redesign must remain cheaper than
+ * the stock presentation it replaces.
+ */
+
+:root,
+.theme-dark,
+.theme-midnight {
+    --xo-canvas: #000;
+    --xo-panel: #050506;
+    --xo-card: #0a0a0c;
+    --xo-card-hover: #111116;
+    --xo-card-active: #17131f;
+    --xo-line: rgba(255, 255, 255, 0.085);
+    --xo-line-strong: rgba(255, 255, 255, 0.15);
+    --xo-text: #f5f3f8;
+    --xo-muted: #aaa5b3;
+    --xo-dim: #716c79;
+    --xo-accent: #a78bfa;
+    --xo-accent-soft: rgba(167, 139, 250, 0.14);
+    --xo-radius: 10px;
+    --xo-radius-lg: 14px;
+
+    --background-primary: var(--xo-canvas) !important;
+    --background-secondary: var(--xo-panel) !important;
+    --background-secondary-alt: var(--xo-panel) !important;
+    --background-tertiary: var(--xo-canvas) !important;
+    --background-floating: var(--xo-card) !important;
+    --background-mod-subtle: var(--xo-card) !important;
+    --background-mod-normal: var(--xo-card-hover) !important;
+    --background-mod-strong: var(--xo-card-active) !important;
+    --interactive-active: var(--xo-text) !important;
+    --interactive-hover: var(--xo-text) !important;
+    --interactive-normal: var(--xo-muted) !important;
+    --interactive-muted: var(--xo-dim) !important;
+    --text-default: var(--xo-text) !important;
+    --text-muted: var(--xo-muted) !important;
+    --brand-500: var(--xo-accent) !important;
+    --brand-560: #9275e8 !important;
+}
+
+html,
+body,
+#app-mount,
+[class*="app_"],
+[class*="bg_"] {
+    background: var(--xo-canvas) !important;
+}
+
+/* ------------------------------------------------------------------ rail */
+
+html[data-exocord-toprail] nav:is(
+    [aria-label="Servers sidebar"],
+    [data-exocord-rail]
+) {
+    background: var(--xo-panel) !important;
+    border-bottom: 1px solid var(--xo-line) !important;
+}
+
+/* Discord's mask cuts notification/status notches into guild tiles. Those
+ * become white/black holes after the rail is rotated. A solid rounded square
+ * gives every place the same silhouette without touching avatar masks. */
+html[data-exocord-toprail] nav:is(
+    [aria-label="Servers sidebar"],
+    [data-exocord-rail]
+) [data-list-item-id^="guildsnav___"] svg foreignObject {
+    mask: none !important;
+    -webkit-mask: none !important;
+    clip-path: inset(0 round 11px) !important;
+}
+
+html[data-exocord-toprail] nav:is(
+    [aria-label="Servers sidebar"],
+    [data-exocord-rail]
+) [data-list-item-id^="guildsnav___"] {
+    border-radius: 11px !important;
+    background: var(--xo-card) !important;
+    outline: 1px solid var(--xo-line) !important;
+    outline-offset: -1px !important;
+    box-shadow: none !important;
+}
+
+html[data-exocord-toprail] nav:is(
+    [aria-label="Servers sidebar"],
+    [data-exocord-rail]
+) [data-list-item-id^="guildsnav___"]:hover {
+    background: var(--xo-card-hover) !important;
+    outline-color: var(--xo-line-strong) !important;
+}
+
+html[data-exocord-toprail] nav:is(
+    [aria-label="Servers sidebar"],
+    [data-exocord-rail]
+) [data-list-item-id^="guildsnav___"][class*="selected"] {
+    background: var(--xo-card-active) !important;
+    outline: 2px solid var(--xo-accent) !important;
+    outline-offset: -2px !important;
+}
+
+/* One tooltip surface. A broad historical substring rule also painted
+ * tooltipContent, producing a box inside a box with a white gap. */
+[role="tooltip"][class*="tooltip"] {
+    padding: 8px 10px !important;
+    border: 1px solid var(--xo-line-strong) !important;
+    border-radius: var(--xo-radius) !important;
+    background: var(--xo-card) !important;
+    color: var(--xo-text) !important;
+    box-shadow: none !important;
+}
+
+[role="tooltip"][class*="tooltip"] > [class*="tooltipContent"] {
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+[role="tooltip"][class*="tooltip"] > [class*="caret"],
+[role="tooltip"][class*="tooltip"] [class*="tooltipPointer"] {
+    display: none !important;
+}
+
+/* -------------------------------------------------------------- sidebars */
+
+div[class*="sidebarList_"],
+nav[class*="privateChannels"],
+nav[aria-label$="(server)"],
+[class*="membersWrap"] {
+    background: var(--xo-panel) !important;
+}
+
+div[class*="sidebarList_"] {
+    border-right: 1px solid var(--xo-line) !important;
+}
+
+nav[class*="privateChannels"] li[class*="channel"] > [class*="interactive"],
+nav[class*="privateChannels"] a[href^="/channels/@me/"],
+nav[aria-label$="(server)"] a[href^="/channels/"],
+[class*="membersWrap"] [class*="member_"] {
+    border: 1px solid transparent !important;
+    border-radius: var(--xo-radius) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+nav[class*="privateChannels"] li[class*="channel"] > [class*="interactive"]:hover,
+nav[class*="privateChannels"] a[href^="/channels/@me/"]:hover,
+nav[aria-label$="(server)"] a[href^="/channels/"]:hover,
+[class*="membersWrap"] [class*="member_"]:hover {
+    border-color: var(--xo-line) !important;
+    background: var(--xo-card-hover) !important;
+}
+
+nav[class*="privateChannels"] [class*="selected"][class*="interactive"],
+nav[class*="privateChannels"] li[class*="channel"] [class*="selected"],
+nav[aria-label$="(server)"] li[class*="selected_"] a[href^="/channels/"] {
+    border-color: rgba(167, 139, 250, 0.38) !important;
+    background: var(--xo-accent-soft) !important;
+    box-shadow: inset 3px 0 0 var(--xo-accent) !important;
+}
+
+/* Stock unread state is a detached 4x8 white capsule partly outside the
+ * sidebar—the remaining white "holes" along its left edge. Unread channels
+ * already use brighter/bolder text, so the duplicate marker is unnecessary. */
+nav[aria-label$="(server)"] [class*="unreadImportant"],
+nav[aria-label$="(server)"] [class*="unread_"] {
+    display: none !important;
+}
+
+[class*="privateChannelsHeaderContainer"],
+nav[aria-label$="(server)"] [class*="containerDefault_"]:has([class*="wrapper_"]) {
+    color: var(--xo-dim) !important;
+    letter-spacing: 0.055em !important;
+    text-transform: uppercase !important;
+}
+
+section[aria-label="User status and settings"] {
+    border-color: var(--xo-line-strong) !important;
+    border-radius: var(--xo-radius-lg) !important;
+    background: var(--xo-card) !important;
+}
+
+/* --------------------------------------------------------------- Friends */
+
+main[aria-label="Friends"] {
+    background: var(--xo-canvas) !important;
+}
+
+main[aria-label="Friends"] > section {
+    border-bottom: 1px solid var(--xo-line) !important;
+    background: var(--xo-panel) !important;
+}
+
+main[aria-label="Friends"] [role="tab"],
+[data-exocord-friends-settings] {
+    border: 1px solid transparent !important;
+    border-radius: var(--xo-radius) !important;
+    background: transparent !important;
+}
+
+main[aria-label="Friends"] [role="tab"]:hover,
+[data-exocord-friends-settings]:hover {
+    border-color: var(--xo-line) !important;
+    background: var(--xo-card-hover) !important;
+}
+
+main[aria-label="Friends"] [role="tab"][aria-selected="true"] {
+    border-color: rgba(167, 139, 250, 0.38) !important;
+    background: var(--xo-accent-soft) !important;
+    box-shadow: inset 0 -2px 0 var(--xo-accent) !important;
+}
+
+[class*="peopleList"] [class*="sectionTitle"] {
+    margin: 8px 14px 4px !important;
+}
+
+[class*="peopleList"] [class*="peopleListItem"] {
+    height: 50px !important;
+    min-height: 50px !important;
+    margin: 4px 14px !important;
+    padding: 0 10px !important;
+    border: 1px solid var(--xo-line) !important;
+    border-radius: var(--xo-radius-lg) !important;
+    background: var(--xo-card) !important;
+}
+
+[class*="peopleList"] [class*="peopleListItem"]:hover {
+    border-color: var(--xo-line-strong) !important;
+    background: var(--xo-card-hover) !important;
+}
+
+/* ------------------------------------------------------------------ chat */
+
+[class*="chatContent"],
+[class*="messagesWrapper"],
+[data-list-id="chat-messages"] {
+    background: var(--xo-canvas) !important;
+}
+
+[data-list-id="chat-messages"] [class*="messageListItem"] > [class*="message"] {
+    margin: 2px 10px !important;
+    padding-top: 5px !important;
+    padding-bottom: 5px !important;
+    border: 1px solid transparent !important;
+    border-radius: var(--xo-radius) !important;
+}
+
+[data-list-id="chat-messages"] [class*="messageListItem"] > [class*="message"]:hover {
+    border-color: var(--xo-line) !important;
+    background: var(--xo-card) !important;
+}
+
+[class*="channelTextArea"] {
+    margin: 0 10px 10px !important;
+    border: 1px solid var(--xo-line-strong) !important;
+    border-radius: var(--xo-radius-lg) !important;
+    background: var(--xo-card) !important;
+}
+
+[class*="channelTextArea"]:focus-within {
+    border-color: rgba(167, 139, 250, 0.48) !important;
+    box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.16) !important;
+}
+
+[class*="divider"] [class*="content"] {
+    padding: 3px 9px !important;
+    border: 1px solid var(--xo-line) !important;
+    border-radius: 999px !important;
+    background: var(--xo-canvas) !important;
+    color: var(--xo-dim) !important;
+}
+
+/* -------------------------------------------------------- floating/profile */
+
+:is(
+    [class*="user-profile-popout"],
+    [role="menu"][class*="menu_"],
+    [class*="quickswitcher"],
+    [class*="autocomplete"],
+    [class*="expressionPicker"],
+    [class*="emojiPicker"]
+) {
+    border: 1px solid var(--xo-line-strong) !important;
+    border-radius: var(--xo-radius-lg) !important;
+    background: var(--xo-card) !important;
+    box-shadow: none !important;
+}
+
+[class*="user-profile-popout"] [class*="body_"] {
+    background: linear-gradient(180deg, transparent, var(--xo-card) 38%) !important;
+}
+
+/* --------------------------------------------------------------- settings */
+
+[role="dialog"] [class*="standardSidebarView"] {
+    border: 1px solid var(--xo-line-strong) !important;
+    border-radius: var(--xo-radius-lg) !important;
+    background: var(--xo-canvas) !important;
+    overflow: hidden !important;
+}
+
+[role="dialog"] [class*="sidebarRegion"],
+[role="dialog"] [class*="sidebar_"] {
+    background: var(--xo-panel) !important;
+}
+
+[data-settings-sidebar-item] {
+    margin: 2px 0 !important;
+    border: 1px solid transparent !important;
+    border-radius: var(--xo-radius) !important;
+}
+
+[data-settings-sidebar-item]:hover {
+    border-color: var(--xo-line) !important;
+    background: var(--xo-card-hover) !important;
+}
+
+[data-settings-sidebar-item][aria-selected="true"],
+[data-settings-sidebar-item][class*="selected"] {
+    border-color: rgba(167, 139, 250, 0.38) !important;
+    background: var(--xo-accent-soft) !important;
+    box-shadow: inset 3px 0 0 var(--xo-accent) !important;
+}
+
+/* --------------------------------------------------------- common controls */
+
+:is(button, [role="button"], input, textarea, [role="combobox"]) {
+    outline-color: var(--xo-accent) !important;
+}
+
+button[class*="lookFilled"],
+button[class*="filledBrand"],
+[class*="button"][class*="colorBrand"] {
+    border: 1px solid rgba(167, 139, 250, 0.38) !important;
+    border-radius: var(--xo-radius) !important;
+    background: var(--xo-accent-soft) !important;
+    color: var(--xo-text) !important;
+    box-shadow: none !important;
+}
+
+button[class*="lookFilled"]:hover,
+button[class*="filledBrand"]:hover,
+[class*="button"][class*="colorBrand"]:hover {
+    border-color: var(--xo-accent) !important;
+    background: rgba(167, 139, 250, 0.22) !important;
+}
+
+::-webkit-scrollbar {
+    width: 5px !important;
+    height: 5px !important;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent !important;
+}
+
+::-webkit-scrollbar-thumb {
+    border: 0 !important;
+    border-radius: 999px !important;
+    background: rgba(167, 139, 250, 0.24) !important;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(167, 139, 250, 0.42) !important;
+}

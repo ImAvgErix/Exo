@@ -1,0 +1,172 @@
+using System.Text.RegularExpressions;
+
+namespace Exo.Services;
+
+/// <summary>
+/// Pure NVIDIA detect classifiers (no I/O). Aligned with Scripts/Nvidia/NvidiaDetectCore.ps1.
+/// </summary>
+public static partial class NvidiaDetectLogic
+{
+    [GeneratedRegex(@"(?i)\b(?:RTX|GTX)\s*([1-5])0\d{2}\b")]
+    private static partial Regex GpuSeriesPrefixedRegex();
+
+    [GeneratedRegex(@"(?i)\b([1-5])0\d{2}\b")]
+    private static partial Regex GpuSeriesBareRegex();
+
+    [GeneratedRegex(@"(?i)\b16\d{2}\b")]
+    private static partial Regex Gtx16SeriesRegex();
+
+    [GeneratedRegex(@"(?i)\b(?:Laptop GPU|Notebook|Mobile|Max-Q)\b|\bMX\d+\b|\b\d{3,4}M\b")]
+    private static partial Regex NotebookGpuRegex();
+
+    [GeneratedRegex(@"^[a-fA-F0-9]{64}$")]
+    private static partial Regex Sha256HexRegex();
+
+    /// <summary>Map GPU name to series id used for NIP packs (10/20/30/40/50).</summary>
+    public static string? GetGpuSeriesFromName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+        var m = GpuSeriesPrefixedRegex().Match(name);
+        if (m.Success) return m.Groups[1].Value + "0";
+        m = GpuSeriesBareRegex().Match(name);
+        if (m.Success) return m.Groups[1].Value + "0";
+        // GTX 16xx → 10-series non-RT pack
+        if (Gtx16SeriesRegex().IsMatch(name)) return "10";
+        return null;
+    }
+
+    public static string ExpectedProfileFileName(string seriesId, bool gsync) =>
+        gsync ? $"{seriesId} Series G-SYNC.nip" : $"{seriesId} Series.nip";
+
+    public static bool IsNotebookGpuName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return false;
+        return NotebookGpuRegex().IsMatch(name);
+    }
+
+    /// <summary>
+    /// Live display status JSON gate: refresh AND color AND scaling, every term read back from
+    /// the driver. Mirrors the Exo.NvDisplay ok gate.
+    /// The old gate let registryOk short-circuit colorOk, and the registry check passed
+    /// vacuously, so a monitor could sit on limited-range CEA and still read "applied".
+    /// </summary>
+    public static bool IsDisplayStatusOk(
+        bool refreshOk,
+        bool colorOk,
+        bool scalingOk) =>
+        refreshOk && colorOk && scalingOk;
+
+    public static bool ProfileNameMatchesSeries(string? profileFile, string? series, bool gsync)
+    {
+        if (string.IsNullOrWhiteSpace(profileFile) || string.IsNullOrWhiteSpace(series))
+            return false;
+        return string.Equals(
+            profileFile.Trim(),
+            ExpectedProfileFileName(series, gsync),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsSha256Hex(string? hash) =>
+        !string.IsNullOrWhiteSpace(hash) && Sha256HexRegex().IsMatch(hash);
+
+    /// <summary>Feature row detail when live DRS export matches the imported pack.</summary>
+    public const string DrsVerifiedDetailText = "Verified in driver";
+
+    /// <summary>Feature row detail when the driver DRS drifted from the imported pack.</summary>
+    public const string DrsDriftedDetailText = "Drifted — re-apply";
+
+    /// <summary>drsLive detect JSON values.</summary>
+    public static readonly string[] DrsLiveStates = { "verified", "drifted", "unavailable" };
+
+    /// <summary>
+    /// Pins every Exo pack customizes; a correct import must export them.
+    /// Power management, ULL state, frame limiter, G-SYNC global, and VSync policy.
+    /// </summary>
+    public static readonly string[] DrsRequiredPinIds =
+    {
+        "390467", "277041152", "277041154", "294973784", "11041279", "11041231",
+    };
+
+    /// <summary>
+    /// Pure DRS live/import verification classifier.
+    /// Aligned with Get-ExoDrsVerificationResult in NvidiaDetectCore.ps1 / Nvidia-Optimizer.ps1.
+    /// Compares the intersection of pack pins vs a -exportCustomized driver dump.
+    ///   expected null/empty -> unavailable; exported null -> unavailable (old NPI / no export);
+    ///   exported empty -> drifted (no customized Base Profile pins in the driver);
+    ///   any value mismatch or missing required pin -> drifted with honest mismatch list.
+    /// </summary>
+    public static (string Status, int ComparedCount, List<string> Mismatches) ClassifyDrsVerification(
+        IReadOnlyDictionary<string, string>? expected,
+        IReadOnlyDictionary<string, string>? exported,
+        IEnumerable<string>? requiredIds = null)
+    {
+        var mismatches = new List<string>();
+        if (expected is null || expected.Count == 0)
+            return ("unavailable", 0, mismatches);
+        if (exported is null)
+            return ("unavailable", 0, mismatches);
+
+        var compared = 0;
+        foreach (var (id, value) in expected.OrderBy(p => p.Key, StringComparer.Ordinal))
+        {
+            if (!exported.TryGetValue(id, out var live)) continue;
+            compared++;
+            if (!string.Equals(live, value, StringComparison.Ordinal))
+                mismatches.Add($"{id}: expected {value}, driver has {live}");
+        }
+        foreach (var id in requiredIds ?? Enumerable.Empty<string>())
+        {
+            if (!expected.TryGetValue(id, out var value)) continue;
+            if (!exported.ContainsKey(id))
+                mismatches.Add($"{id}: expected {value}, missing from driver export");
+        }
+        if (compared == 0 && mismatches.Count == 0)
+        {
+            mismatches.Add("no imported pack settings present in the driver export");
+            return ("drifted", 0, mismatches);
+        }
+        return (mismatches.Count == 0 ? "verified" : "drifted", compared, mismatches);
+    }
+
+    /// <summary>Profile stage applied = durable state record AND live DRS not drifted.</summary>
+    public static bool IsProfileStageApplied(bool stateRecordOk, string? drsLive) =>
+        stateRecordOk && !string.Equals(drsLive, "drifted", StringComparison.OrdinalIgnoreCase);
+
+    public static readonly string[] RequiredApplyMarkers =
+    {
+        "Import-ExoNipProfile",
+        "Apply-ExoGameProfileDeltas",
+        "Exo-Display-Apply",
+        "silentImport",
+    };
+
+    public static readonly string[] ForbiddenApplyPatterns =
+    {
+        "Register-ScheduledTask -TaskName 'Exo-NvidiaTrayHide",
+        "Register-ScheduledTask -TaskName 'Exo-NvidiaDisplayPersist",
+        "schtasks /Create /TN \"Exo-Nvidia",
+        "MaxUserPort",
+        "FPS Unlocker",
+    };
+
+    public static (bool Ok, List<string> Issues) AuditApplyScriptText(string script)
+    {
+        var issues = new List<string>();
+        if (string.IsNullOrWhiteSpace(script))
+        {
+            issues.Add("empty");
+            return (false, issues);
+        }
+        foreach (var m in RequiredApplyMarkers)
+        {
+            if (script.IndexOf(m, StringComparison.OrdinalIgnoreCase) < 0)
+                issues.Add("missing: " + m);
+        }
+        foreach (var f in ForbiddenApplyPatterns)
+        {
+            if (script.IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0)
+                issues.Add("forbidden: " + f);
+        }
+        return (issues.Count == 0, issues);
+    }
+}

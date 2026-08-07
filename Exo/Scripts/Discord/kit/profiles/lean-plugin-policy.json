@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "_comment": "THE single owner of which plugins are enabled. equicord-overrides.json carries per-plugin options only; its enabled flags are ignored by the writer. Manifest required=true plugins and manifest-described dependencies are added on top of this list at apply time. v2 adds DisableCallIdle (no alone-in-voice auto-disconnect), SearchFix (works around Discord's broken search), and OnePingPerDM (collapses rapid DM ping spam) - all three sat fully configured in the overrides file while this policy switched them straight back off on every apply.",
+  "enabled": [
+    "NoTrack",
+    "Settings",
+    "CrashHandler",
+    "ConsoleJanitor",
+    "ClearURLs",
+    "NoRPC",
+    "SilentTyping",
+    "IgnoreActivities",
+    "Declutter",
+    "HideChatButtons",
+    "NoNitroUpsell",
+    "NoPendingCount",
+    "NoProfileThemes",
+    "NoSystemBadge",
+    "NoF1",
+    "NoTypingAnimation",
+    "NotificationVolume",
+    "FakeNitro",
+    "LimitlessScreenshare",
+    "DisableCallIdle",
+    "SearchFix",
+    "OnePingPerDM"
+  ],
+  "maximumEnabled": 36
+}

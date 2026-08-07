@@ -1,0 +1,197 @@
+/*
+ * Exo shell tokens.
+ *
+ * One screen, one palette. Every value here is from the design handoff; nothing is
+ * eyeballed. The two custom properties at the top are the only things the user can
+ * change, and every size and text colour in the app is authored against them:
+ *
+ *   --exo-text   the primary ink, and the fill of bars and filled buttons
+ *   --exo-scale  a multiplier every font-size is written as calc(<base>px * …)
+ *
+ * Because the module list divides the window height with minmax(0,1fr) rows, a larger
+ * --exo-scale needs no layout change — the rows absorb it.
+ */
+
+:root {
+  --exo-text: #ffffff;
+  --exo-scale: 1;
+
+  /* Text */
+  --exo-secondary: #8a8a8f;  /* hints, links, icon buttons, READY */
+  --exo-muted: #6a6a72;      /* labels, details, NOT INSTALLED */
+  --exo-dim-mark: #5c5c66;   /* brand glyph on a not-installed row */
+
+  /* Status */
+  --exo-dot-ready: #3f3f46;
+  --exo-dot-missing: #2c2c33;
+  --exo-amber: #ffb020;      /* blocked dot + word */
+  --exo-close-hover: #c0303c;
+
+  /* Surfaces */
+  --exo-hairline: rgba(255, 255, 255, 0.07);
+  --exo-row-hover: rgba(255, 255, 255, 0.028);
+  --exo-icon-hover: rgba(255, 255, 255, 0.08);
+  --exo-outline: rgba(255, 255, 255, 0.22);
+  --exo-track: rgba(255, 255, 255, 0.055);
+  --exo-bar-track: rgba(255, 255, 255, 0.1);
+  --exo-sheet-border: rgba(255, 255, 255, 0.16);
+  --exo-scrim: rgba(0, 0, 0, 0.72);
+  --exo-link-chevron: #4a4a52;
+
+  /* Motion */
+  --exo-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --exo-spring: cubic-bezier(0.34, 1.32, 0.36, 1);
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+}
+
+body {
+  color: var(--exo-text);
+  font-family: 'Geist Variable', 'Geist', 'Segoe UI Variable Text', system-ui, sans-serif;
+  font-size: 13px;
+  cursor: default;
+  -webkit-font-smoothing: antialiased;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+button,
+[role='radio'] {
+  cursor: pointer;
+}
+
+h1,
+h2,
+h3,
+p,
+span,
+strong,
+small,
+li {
+  user-select: none;
+}
+
+/* The icon fonts render as blocks so a 19px glyph occupies exactly its box. */
+i.si,
+i.ph {
+  display: block;
+  line-height: 1;
+}
+
+:focus-visible {
+  outline: 1.5px solid rgba(255, 255, 255, 0.8);
+  outline-offset: 3px;
+  border-radius: 999px;
+}
+
+/*
+ * Transform-only keyframes, deliberately.
+ *
+ * Animating opacity from 0 with fill-mode: both leaves the element invisible forever if
+ * the animation frame never ticks — a backgrounded WebView2 or a throttled compositor does
+ * exactly that. Entrances that need to fade use motion's AnimatePresence instead, which
+ * settles to a real inline style rather than depending on the frame.
+ */
+@keyframes exo-in {
+  from { transform: translateY(12px); }
+  to { transform: none; }
+}
+
+@keyframes exo-sheet {
+  from { transform: translateY(14px) scale(0.985); }
+  to { transform: none; }
+}
+
+@keyframes exo-drop {
+  from { transform: translateY(-10px) scale(0.98); }
+  to { transform: none; }
+}
+
+@keyframes exo-spin {
+  to { transform: rotate(360deg); }
+}
+
+/*
+ * Interaction states.
+ *
+ * Everything else in the shell is an inline style, because each value is read straight off
+ * the handoff and belongs next to the element it describes. Hover and active cannot be
+ * expressed inline, so they live here — and only here.
+ */
+
+/* The title strip is the drag handle; its controls must not be. */
+.exo-titlebar {
+  -webkit-app-region: drag;
+}
+
+.exo-titlebar button,
+.exo-titlebar a {
+  -webkit-app-region: no-drag;
+}
+
+.exo-titlebar-button {
+  display: grid;
+  width: 32px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  color: var(--exo-secondary);
+  background: transparent;
+  transition: background 170ms ease, color 170ms ease;
+}
+
+.exo-titlebar-button:hover {
+  background: var(--exo-icon-hover);
+  color: var(--exo-text);
+}
+
+.exo-titlebar-button.is-close:hover {
+  background: var(--exo-close-hover);
+  color: #fff;
+}
+
+/* Each optimizer is its own card; hover lifts the surface and the edge together. */
+.exo-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* Pill buttons: a small spring on hover, a press that settles under the finger. */
+.exo-press:hover {
+  transform: translateY(-1.5px);
+}
+
+.exo-press:active {
+  transform: scale(0.98);
+}
+
+.exo-sheet-cancel:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: var(--exo-text);
+}
+
+.exo-link-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--exo-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

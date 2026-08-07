@@ -1,0 +1,33 @@
+# Exo dependency hygiene: Dependabot keeps the .NET and npm dependency trees
+# current so CI's vulnerability scan has fresh data to check. Grouped so a
+# framework-wide patch (e.g. a WindowsAppSDK servicing release) opens one PR
+# instead of ten.
+version: 2
+updates:
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    groups:
+      windowsappsdk:
+        patterns:
+          - "Microsoft.WindowsAppSDK*"
+      xunit:
+        patterns:
+          - "xunit*"
+          - "Microsoft.NET.Test.Sdk"
+
+  - package-ecosystem: "npm"
+    directory: "/ui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"

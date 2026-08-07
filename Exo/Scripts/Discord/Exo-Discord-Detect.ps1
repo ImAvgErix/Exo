@@ -1,0 +1,492 @@
+# Exo - detect whether Discord Optimizer is already applied.
+# Prints a single JSON object to stdout for the WinUI host.
+# Classifiers: DiscordDetectCore.ps1 (pure) - keep aligned with DiscordLogic.cs
+
+$ErrorActionPreference = 'SilentlyContinue'
+
+$core = Join-Path $PSScriptRoot 'DiscordDetectCore.ps1'
+if (-not (Test-Path -LiteralPath $core)) { throw "Missing DiscordDetectCore.ps1 beside detect script" }
+. $core
+
+$local = [Environment]::GetFolderPath('LocalApplicationData')
+$appData = [Environment]::GetFolderPath('ApplicationData')
+$discordRoot = Join-Path $local 'Discord'
+$equicord = Join-Path $appData 'Equicord'
+
+$features = New-Object System.Collections.Generic.List[hashtable]
+$isApplied = $false
+$statusText = 'Ready to optimize'
+$detail = 'Run the optimizer to cut Discord memory use, speed startup, and quiet background noise.'
+$statePath = Join-Path $local 'Exo\discord-optimizer.json'
+$state = $null
+if (Test-Path -LiteralPath $statePath) {
+    try { $state = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json }
+    catch { $state = $null }
+}
+
+function Add-Feature([string]$Title, [string]$Detail, [bool]$Active) {
+    $script:features.Add(@{
+        title  = $Title
+        detail = $Detail
+        active = $Active
+    })
+}
+
+function Get-LeanPluginStatus($Settings) {
+    try {
+        $profiles = Join-Path $PSScriptRoot 'kit\profiles'
+        $policy = Get-Content (Join-Path $profiles 'lean-plugin-policy.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        $manifest = @()
+        $manifest += @(Get-Content (Join-Path $profiles 'equicordplugins.json') -Raw -Encoding UTF8 | ConvertFrom-Json)
+        $manifest += @(Get-Content (Join-Path $profiles 'vencordplugins.json') -Raw -Encoding UTF8 | ConvertFrom-Json)
+        $byName = @{}
+        foreach ($plugin in $manifest) { $byName[[string]$plugin.name] = $plugin }
+        $allowed = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        $required = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($name in @($policy.enabled)) { [void]$allowed.Add([string]$name); [void]$required.Add([string]$name) }
+        foreach ($plugin in $manifest) {
+            if ($plugin.required -eq $true) {
+                [void]$allowed.Add([string]$plugin.name)
+                [void]$required.Add([string]$plugin.name)
+            }
+        }
+        # ALLOWED and REQUIRED are not the same set, and conflating them is what kept this
+        # row off. Six Equicord internals (MessageEventsAPI, CommandsAPI, ChatInputButtonAPI,
+        # UserSettingsAPI, HeaderBarAPI, MessageAccessoriesAPI) are named as dependencies but
+        # have no entry in the shipped manifests, because Equicord loads them implicitly.
+        #   - Apply cannot write them, so they must never be REQUIRED.
+        #   - Equicord does enable them and does write them into settings.json, so they must
+        #     still be ALLOWED, or the allow-list check rejects plugins the user never chose.
+        # Requiring them made the row unsatisfiable (Apply produced 23, detect demanded 29).
+        # Skipping them entirely just moved the failure: required went to 23 and all 23 were
+        # satisfied, but the same six then failed as "enabled but not allowed" -- measured
+        # live on a real profile as enabled=29, allowed=23.
+        do {
+            $changed = $false
+            foreach ($name in @($allowed)) {
+                if (-not $byName.ContainsKey($name)) { continue }
+                if ($byName[$name].PSObject.Properties.Name -notcontains 'dependencies') { continue }
+                foreach ($dependency in @($byName[$name].dependencies)) {
+                    if (-not $dependency) { continue }
+                    $dependencyName = [string]$dependency
+                    if ($allowed.Add($dependencyName)) { $changed = $true }
+                    # Only a manifest-described dependency is something Apply can write.
+                    if ($byName.ContainsKey($dependencyName)) { [void]$required.Add($dependencyName) }
+                }
+            }
+        } while ($changed)
+        $enabled = @($Settings.plugins.PSObject.Properties | Where-Object { $_.Value.enabled -eq $true } | ForEach-Object Name)
+        $ok = Test-DiscOptLeanPluginNames -EnabledNames $enabled -AllowedNames @($allowed) -RequiredNames @($required) -MaximumEnabled ([int]$policy.maximumEnabled)
+        return [pscustomobject]@{
+            Ok = $ok
+            Enabled = $enabled.Count
+            Curated = @($policy.enabled).Count
+            Dependencies = [Math]::Max(0, $enabled.Count - @($policy.enabled).Count)
+            Maximum = [int]$policy.maximumEnabled
+            Error = ''
+        }
+    } catch {
+        return [pscustomobject]@{ Ok = $false; Enabled = 0; Curated = 0; Dependencies = 0; Maximum = 0; Error = $_.Exception.Message }
+    }
+}
+
+function Test-StableDiscordWindowsQuiet([string]$Root) {
+    # Policy (matches Apply-WindowsTweaks): no autostart/tasks; tray hidden when entries exist.
+    try {
+        $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+        if (Test-Path $runKey) {
+            $run = Get-Item -Path $runKey -ErrorAction Stop
+            foreach ($name in @($run.GetValueNames())) {
+                if (Test-DiscOptStablePathText ([string]$run.GetValue($name)) $Root) { return $false }
+            }
+        }
+
+        # Skip full Get-ScheduledTask catalog (multi-second). Discord rarely installs
+        # enabled scheduled tasks; Run-key + tray checks below cover quiet Windows integration.
+
+        $trayRoot = 'HKCU:\Control Panel\NotifyIconSettings'
+        if (Test-Path $trayRoot) {
+            foreach ($key in @(Get-ChildItem -Path $trayRoot -ErrorAction SilentlyContinue)) {
+                $item = Get-Item -Path $key.PSPath -ErrorAction SilentlyContinue
+                if (-not $item) { continue }
+                $exe = [string]$item.GetValue('ExecutablePath')
+                if (-not $exe) { continue }
+                if (-not ((Test-DiscOptStablePathText $exe $Root) -or ($exe -match '(?i)Discord'))) { continue }
+                if ($item.GetValueNames() -notcontains 'IsPromoted' -or [int]$item.GetValue('IsPromoted') -ne 0) {
+                    return $false
+                }
+            }
+        }
+        return $true
+    } catch { return $false }
+}
+
+function Test-DiscordToastsOff {
+    # Product policy: Windows toast banners OFF for Discord (quiet OS shell).
+    $base = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
+    $ids = @('Discord', 'Discord.Desktop', 'DiscordInc.Discord', 'com.squirrel.Discord.Discord')
+    $map = @{}
+    foreach ($id in $ids) {
+        $path = Join-Path $base $id
+        if (-not (Test-Path -LiteralPath $path)) {
+            $map[$id] = $null
+            continue
+        }
+        try {
+            $entry = Get-ItemProperty -Path $path -ErrorAction Stop
+            $prop = $entry.PSObject.Properties['Enabled']
+            if (-not $prop) { $map[$id] = $null }
+            else { $map[$id] = [int]$prop.Value }
+        } catch { $map[$id] = 1 }
+    }
+    return (Test-DiscOptToastsOffFromMap -Map $map)
+}
+
+function Get-DiscordQosPolicyValueMap([string]$PolicyName) {
+    $path = Join-Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\QoS' $PolicyName
+    if (-not (Test-Path -LiteralPath $path)) { return $null }
+    $map = @{}
+    try {
+        $item = Get-Item -LiteralPath $path -ErrorAction Stop
+        foreach ($name in @($item.GetValueNames())) {
+            $map[$name] = [string]$item.GetValue($name)
+        }
+    } catch { return $null }
+    return $map
+}
+
+function Get-InstalledDetectVariants {
+    $installed = @()
+    foreach ($variant in @(Get-DiscOptVariantDefinitions)) {
+        $root = Join-Path $local ([string]$variant.LocalDir)
+        if (Test-Path -LiteralPath $root) {
+            $apps = @(Get-ChildItem -LiteralPath $root -Directory -Filter 'app-*' -ErrorAction SilentlyContinue)
+            if ($apps.Count -gt 0) { $installed += , $variant }
+        }
+    }
+    return @($installed)
+}
+
+function Test-VariantAutostartQuiet([string]$LocalDir) {
+    try {
+        $variantRoot = Join-Path $local $LocalDir
+        $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+        if (-not (Test-Path $runKey)) { return $true }
+        $run = Get-Item -Path $runKey -ErrorAction Stop
+        foreach ($name in @($run.GetValueNames())) {
+            if (Test-DiscOptStablePathText ([string]$run.GetValue($name)) $variantRoot) { return $false }
+        }
+        return $true
+    } catch { return $false }
+}
+
+function Test-FileHashMatch([string]$Source, [string]$Destination) {
+    try {
+        if (-not (Test-Path -LiteralPath $Source) -or -not (Test-Path -LiteralPath $Destination)) { return $false }
+        return (Get-FileHash -LiteralPath $Source -Algorithm SHA256 -ErrorAction Stop).Hash -ieq
+            (Get-FileHash -LiteralPath $Destination -Algorithm SHA256 -ErrorAction Stop).Hash
+    } catch { return $false }
+}
+
+if (-not (Test-Path $discordRoot)) {
+    $statusText = 'Discord not installed'
+    $detail = 'Install Discord stable first, or let the optimizer install it for you.'
+    Add-Feature 'Discord installed' 'Install Discord, open it once, then return here to optimize.' $false
+} else {
+    $app = Get-ChildItem -LiteralPath $discordRoot -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
+        Sort-Object {
+            $parsed = [version]'0.0.0.0'
+            [void][version]::TryParse(($_.Name -replace '^app-', ''), [ref]$parsed)
+            $parsed
+        } -Descending |
+        Select-Object -First 1
+
+    if (-not $app) {
+        $statusText = 'Discord incomplete'
+        $detail = 'No active Discord build folder was found.'
+        Add-Feature 'Discord ready' 'Discord is installed but no active build was found. Open Discord once, then Apply.' $false
+    } else {
+        $resources = Join-Path $app.FullName 'resources'
+        $equicordAsar = Join-Path $equicord 'equicord.asar'
+        $appAsar = Join-Path $resources 'app.asar'
+        $openAsarTarget = Join-Path $resources '_app.asar'
+        $versionDll = Join-Path $app.FullName 'version.dll'
+        $ffmpeg = Join-Path $app.FullName 'ffmpeg.dll'
+        $configIni = Join-Path $app.FullName 'config.ini'
+        $kitDir = Join-Path $PSScriptRoot 'kit'
+
+        $equicordOk = $false
+        if ((Test-Path -LiteralPath $equicordAsar) -and ((Get-Item -LiteralPath $equicordAsar).Length -gt 1000000) -and
+            (Test-Path -LiteralPath $appAsar)) {
+            try {
+                $loaderBytes = [IO.File]::ReadAllBytes($appAsar)
+                $equicordOk = Test-DiscOptEquicordLoaderBytes -Bytes $loaderBytes
+            } catch { $equicordOk = $false }
+        }
+        Add-Feature 'Privacy-first client' 'Noise and telemetry stripped; Equicord powers a cleaner, private Discord experience.' $equicordOk
+
+        # Exo Host (current): stock shell on _app.asar (large) + host flags in settings.json.
+        # Legacy OpenAsar (small _app.asar rewrite) is NOT accepted - Apply never produces it.
+        $stockShellOk = $false
+        if (Test-Path -LiteralPath $openAsarTarget) {
+            $stockShellOk = (Get-Item -LiteralPath $openAsarTarget).Length -gt 1000000
+        }
+        $quickStartOk = $false
+        $settingsPathForQs = Join-Path $appData 'discord\settings.json'
+        if (Test-Path -LiteralPath $settingsPathForQs) {
+            try {
+                $sjRaw = Get-Content $settingsPathForQs -Raw -Encoding UTF8
+                $quickStartOk = Test-DiscOptQuickStartFromSettingsJson -JsonText $sjRaw
+            } catch { }
+        }
+        # Host path: Equicord + stock _app.asar + host flags (binary, no legacy path)
+        $exoHostOk = $equicordOk -and $quickStartOk -and $stockShellOk
+        Add-Feature 'Instant launch path' 'Discord starts faster with a tuned host path  -  no bloated startup shell.' $exoHostOk
+
+        $kernelOk = $false
+        $ffmpegReal = Join-Path $app.FullName 'ffmpeg_real.dll'
+        $kernelWhy = ''
+        if ((Test-Path -LiteralPath $versionDll) -and (Test-Path -LiteralPath $ffmpeg) -and
+            (Test-Path -LiteralPath $ffmpegReal) -and (Test-Path -LiteralPath $configIni)) {
+            $ffSize = (Get-Item -LiteralPath $ffmpeg).Length
+            $realSize = (Get-Item -LiteralPath $ffmpegReal).Length
+            $verSize = (Get-Item -LiteralPath $versionDll).Length
+            $configText = Get-Content -LiteralPath $configIni -Raw -ErrorAction SilentlyContinue
+            $proxyHashOk = Test-FileHashMatch (Join-Path $kitDir 'ffmpeg.dll') $ffmpeg
+            $verHashOk = Test-FileHashMatch (Join-Path $kitDir 'version.dll') $versionDll
+            # config.ini: content valid (4000 or 5000 trim, etc.) - do not require exact kit hash
+            # (kit may ship a newer interval while an applied config remains correct)
+            $kernelOk = Test-DiscOptKernelApplied `
+                -FfmpegProxyBytes $ffSize `
+                -FfmpegRealBytes $realSize `
+                -VersionDllBytes $verSize `
+                -ConfigText $configText `
+                -ProxyHashMatchesKit $proxyHashOk `
+                -VersionHashMatchesKit $verHashOk
+
+            # "Needs reapply" collapses three different facts into one word, and a user who
+            # reapplies and is told to reapply again has no way to find out which one. Name it.
+            if (-not $kernelOk) {
+                $why = @()
+                if (-not $proxyHashOk) { $why += 'ffmpeg proxy differs from the shipped kit' }
+                if (-not $verHashOk)   { $why += 'version.dll differs from the shipped kit' }
+                if (-not (Test-DiscOptKernelConfigText $configText)) { $why += 'config.ini content not recognised' }
+                if ($why.Count -eq 0) { $why += 'kernel file layout on disk is not the expected shape' }
+                $kernelWhy = ' Reapply needed: ' + ($why -join '; ') + '.'
+            }
+        }
+        Add-Feature 'Smart memory & input' ('Idle RAM is reclaimed gently while Discord stays responsive  -  priority and input tuned for voice and chat.' + $kernelWhy) $kernelOk
+
+        $modPath = Join-Path $app.FullName 'modules'
+        $optionalModules = @('discord_hook-1', 'discord_clips-1')
+        # Always force arrays with @() - bare if/pipeline can unwrap to $null (Count throws under StrictMode).
+        $oldApps = @(Get-ChildItem -LiteralPath $discordRoot -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
+            Where-Object {
+                try {
+                    [IO.Path]::GetFullPath($_.FullName).TrimEnd('\') -ne
+                        [IO.Path]::GetFullPath($app.FullName).TrimEnd('\')
+                } catch { $_.FullName -ne $app.FullName }
+            })
+        # Only count optional modules when they contain payload files (empty recreated dirs != not debloated).
+        $optionalPresent = @()
+        foreach ($name in $optionalModules) {
+            $p = Join-Path $modPath $name
+            if (Test-DiscOptModuleDirHasPayload -ModuleDir $p) { $optionalPresent += $name }
+        }
+        $gameSdk = @()
+        if (Test-Path -LiteralPath $modPath) {
+            # Depth-capped  -  full -Recurse under modules can take seconds
+            $gameSdk = @(Get-ChildItem -LiteralPath $modPath -Filter 'discord_game_sdk_*.dll' -File -Recurse -Depth 3 -ErrorAction SilentlyContinue)
+        }
+        $localePath = Join-Path $app.FullName 'locales'
+        $extraLocales = @()
+        if (Test-Path -LiteralPath $localePath) {
+            $extraLocales = @(Get-ChildItem -LiteralPath $localePath -Filter '*.pak' -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -ne 'en-US.pak' })
+        }
+        $stateMatchesApp = $false
+        # Sparse failure/quick states lack debloatVerified - guard (StrictMode-safe).
+        if ($state -and ($state.PSObject.Properties.Name -contains 'debloatVerified') -and $state.debloatVerified -eq $true) {
+            try {
+                $stateApp = [IO.Path]::GetFullPath([string]$state.appDir).TrimEnd('\')
+                $curApp = [IO.Path]::GetFullPath($app.FullName).TrimEnd('\')
+                $stateMatchesApp = $stateApp -ieq $curApp
+            } catch { }
+        }
+        # Pure classifier (DiscordDetectCore) - soft-drift recovery only when hard signals are clean.
+        $debloatOk = Test-DiscOptClientDebloat `
+            -LeftoverAppBuildCount (@($oldApps).Count) `
+            -OptionalModulePayloadCount (@($optionalPresent).Count) `
+            -GameSdkFileCount (@($gameSdk).Count) `
+            -ExtraLocaleCount (@($extraLocales).Count) `
+            -StateDebloatVerifiedSameApp:$stateMatchesApp
+        Add-Feature 'Slim client cleanup' 'Old builds, clip hooks, game SDK leftovers, extra languages, and junk caches removed  -  your install stays light.' $debloatOk
+
+        $missingRuntime = @(@('discord_desktop_core-1', 'discord_utils-1', 'discord_voice-1', 'discord_media-1') |
+            Where-Object { -not (Test-Path -LiteralPath (Join-Path $modPath $_)) })
+        $runtimeOk = $missingRuntime.Count -eq 0
+        Add-Feature 'Core modules healthy' 'Voice, media, and desktop modules are intact so Discord stays fully working.' $runtimeOk
+
+        $amoledOk = $false
+        $leanPluginsOk = $false
+        $leanPluginDetail = 'Only the features you need stay on  -  extras stay off until you want them.'
+        $settingsPath = Join-Path $appData 'discord\settings.json'
+        if (Test-Path -LiteralPath $settingsPath) {
+            try {
+                $sjRaw = Get-Content $settingsPath -Raw -Encoding UTF8
+                $sj = $sjRaw | ConvertFrom-Json
+                if ($sj.BACKGROUND_COLOR -eq '#000000') { $amoledOk = $true }
+            } catch {}
+        }
+        $eqRoot = Join-Path $appData 'Equicord'
+        $eqThemeFile = Join-Path $eqRoot 'themes\amoled-cord.theme.css'
+        $eqSettings = Join-Path $eqRoot 'settings\settings.json'
+        if ((Test-Path -LiteralPath $eqThemeFile) -and (Test-Path -LiteralPath $eqSettings)) {
+            try {
+                $eqSj = Get-Content $eqSettings -Raw -Encoding UTF8 | ConvertFrom-Json
+                $enabled = @($eqSj.enabledThemes)
+                if ($enabled | Where-Object { "$_" -match '(?i)amoled' }) { $amoledOk = $true }
+                $leanStatus = Get-LeanPluginStatus $eqSj
+                $leanPluginsOk = [bool]$leanStatus.Ok
+                $leanPluginDetail = if ($leanStatus.Error) {
+                    'Feature set will be applied on the next full Apply.'
+                } else {
+                    'Curated essentials on; optional extras stay off for a lighter, faster client.'
+                }
+            } catch {
+                if (Test-Path -LiteralPath $eqThemeFile) { $amoledOk = $true }
+            }
+        } elseif (Test-Path -LiteralPath $eqThemeFile) {
+            $amoledOk = $true
+        }
+        Add-Feature 'True black theme' 'OLED-friendly pure black look  -  easy on the eyes in long sessions.' $amoledOk
+        Add-Feature 'Essentials-only features' $leanPluginDetail $leanPluginsOk
+
+        # Exocord layer. Requires the managed block to be present AND useQuickCss on, because
+        # either one alone does nothing: Equicord will not load quickCss.css with the setting
+        # off, and the setting was on with a zero-byte file on every machine before this row
+        # existed. Checked as a pair so the row cannot go green on half a config.
+        $exocordLayerOk = $false
+        $quickCssFile = Join-Path $eqRoot 'settings\quickCss.css'
+        if (Test-Path -LiteralPath $quickCssFile) {
+            try {
+                $qc = Get-Content -LiteralPath $quickCssFile -Raw -Encoding UTF8
+                if ($qc -and $qc.Contains('END EXOCORD LAYER')) {
+                    if (Test-Path -LiteralPath $eqSettings) {
+                        $qcSj = Get-Content -LiteralPath $eqSettings -Raw -Encoding UTF8 | ConvertFrom-Json
+                        if ($qcSj.PSObject.Properties.Name -contains 'useQuickCss') {
+                            $exocordLayerOk = [bool]$qcSj.useQuickCss
+                        }
+                    }
+                }
+            } catch {}
+        }
+        Add-Feature 'Exocord layer' 'Snappier motion, cleaner scrollbars, and surfaces tuned for the pure black theme.' $exocordLayerOk
+
+        # Windows quiet = OS shell only (Run key / tasks / OS toasts / tray).
+        # Discord OPEN_ON_STARTUP is an in-app pref and is intentionally not required.
+        $notificationsOk = Test-DiscordToastsOff
+        $windowsQuietOk = $notificationsOk -and (Test-StableDiscordWindowsQuiet $discordRoot)
+        Add-Feature 'Silent Windows integration' 'No autostart spam, no toast clutter, tray stays out of the way. In-app Discord prefs stay yours.' $windowsQuietOk
+
+        $launchOk = $false
+        try {
+            $sm = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Discord Inc\Discord.lnk'
+            if (Test-Path $sm) {
+                $sc = (New-Object -ComObject WScript.Shell).CreateShortcut($sm)
+                $tp = [string]$sc.TargetPath
+                $args = [string]$sc.Arguments
+                # Preferred: official Update.exe --processStart Discord.exe
+                if ($tp -match '(?i)Update\.exe$' -and $args -match '(?i)processStart') { $launchOk = $true }
+                # Legacy: Discord.vbs via wscript
+                elseif ($tp -match '(?i)wscript\.exe$' -and $args -match '(?i)Discord\.vbs') { $launchOk = $true }
+                # Also accept direct Discord.exe in app-* (still works)
+                elseif ($tp -match '(?i)Discord\.exe$') { $launchOk = $true }
+            }
+        } catch {}
+        Add-Feature 'Clean Start Menu launch' 'Start Menu opens Discord the right way  -  no desktop icon clutter.' $launchOk
+
+        # Voice QoS (DSCP 46 / UDP) policy for every installed variant
+        $installedVariants = @(Get-InstalledDetectVariants)
+        $qosOk = $installedVariants.Count -gt 0
+        foreach ($variant in $installedVariants) {
+            $map = Get-DiscordQosPolicyValueMap ([string]$variant.QosPolicy)
+            if (-not (Test-DiscOptQosPolicyMap -Map $map -ExpectedExe ([string]$variant.Exe))) {
+                $qosOk = $false
+                break
+            }
+        }
+        # A present policy is not a working policy. Windows drops policy-based DSCP marking
+        # on any non-domain network unless this switch is set, so a home PC could have every
+        # policy value correct and still mark nothing. Checking the values alone was a
+        # guaranteed false green on exactly the machines this feature is aimed at.
+        if ($qosOk) {
+            $nlaOk = $false
+            try {
+                $nlaVal = (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\QoS' `
+                    -Name 'Do not use NLA' -ErrorAction SilentlyContinue).'Do not use NLA'
+                $nlaOk = ([string]$nlaVal -eq '1')
+            } catch { }
+            if (-not $nlaOk) { $qosOk = $false }
+        }
+        Add-Feature 'Priority voice traffic' 'Voice packets get network priority on routers that honor DSCP  -  clearer calls under load.' $qosOk
+
+        # PTB / Canary variants: all installed variants must be optimized
+        $extraVariants = @($installedVariants | Where-Object { [string]$_.Name -ne 'stable' })
+        $variantsOk = $true
+        foreach ($variant in $extraVariants) {
+            $variantSettings = Join-Path $appData ((([string]$variant.AppDataDir)) + '\settings.json')
+            $variantFlagsOk = $false
+            if (Test-Path -LiteralPath $variantSettings) {
+                try {
+                    $variantFlagsOk = Test-DiscOptVariantSettingsJson -JsonText (Get-Content -LiteralPath $variantSettings -Raw -Encoding UTF8)
+                } catch { }
+            }
+            $variantAutostartOk = Test-VariantAutostartQuiet ([string]$variant.LocalDir)
+            $variantQosOk = Test-DiscOptQosPolicyMap -Map (Get-DiscordQosPolicyValueMap ([string]$variant.QosPolicy)) -ExpectedExe ([string]$variant.Exe)
+            if (-not (Test-DiscOptVariantOptimized -SettingsFlagsOk $variantFlagsOk -AutostartQuiet $variantAutostartOk -QosOk $variantQosOk)) {
+                $variantsOk = $false
+                break
+            }
+        }
+        $variantDetail = if ($extraVariants.Count -eq 0) {
+            'Stable Discord is covered. PTB and Canary get the same treatment automatically if you install them.'
+        } else {
+            'PTB and Canary get the same quiet launch, no autostart, and priority voice treatment.'
+        }
+        Add-Feature 'All Discord builds covered' $variantDetail $variantsOk
+
+        # Host Game Mode / HAGS / Game Bar live on the Windows card only.
+
+        $markerOk = Test-DiscOptApplyRecord -State $state -CurrentAppDir $app.FullName
+        Add-Feature 'Optimization verified' 'This PC has a completed Discord apply on record for the current build.' $markerOk
+
+        $isApplied = [bool]($markerOk -and $equicordOk -and $exoHostOk -and $kernelOk -and
+            $debloatOk -and $windowsQuietOk -and $amoledOk -and $runtimeOk -and $launchOk -and
+            $qosOk -and $variantsOk -and $leanPluginsOk -and $exocordLayerOk)
+        # Never claim applied without a live app-* build (stale markers / leftover Equicord).
+        if (-not $app) { $isApplied = $false }
+        if ($isApplied) {
+            $statusText = 'Already optimized'
+            $detail = 'Verified Discord policy active: lean client, background policy, privacy settings, and dark mode.'
+        } elseif ($state -and $state.applied -eq $true -and -not $markerOk) {
+            $statusText = 'Discord updated - reapply'
+            $detail = 'Discord installed a new build. Run Apply again to restore Equicord, Exo Host, kernel, and Windows quiet.'
+        } elseif (-not $exoHostOk -or -not $kernelOk -or -not $equicordOk) {
+            $statusText = 'Mods need restore'
+            $detail = 'Equicord, Exo Host, or the DiscOpt kernel is incomplete. Run Apply to restore.'
+        } else {
+            $statusText = 'Ready to optimize'
+            $detail = 'Some pieces are missing. Run Apply to finish setup.'
+        }
+    }
+}
+
+$payload = [ordered]@{
+    isApplied  = $isApplied
+    statusText = $statusText
+    detail     = $detail
+    features   = @($features)
+}
+
+$payload | ConvertTo-Json -Compress -Depth 5

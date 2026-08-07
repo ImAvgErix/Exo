@@ -1,0 +1,54 @@
+/* Border beam — focus / selection chrome (mint accent, not purple). */
+@keyframes exo-beam-spin {
+  to { --exo-beam-angle: 360deg; }
+}
+
+@property --exo-beam-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.exo-beam,
+[data-exocord-beam="1"],
+html[data-exocord-composer-focus="1"] [class*="channelTextArea"],
+html[data-exocord-beam-rail="1"] [class*="wrapper"][aria-selected="true"],
+html[data-exocord-beam-vc="1"] [class*="tile"][class*="speaking"] {
+  position: relative;
+  isolation: isolate;
+}
+
+.exo-beam::before,
+[data-exocord-beam="1"]::before,
+html[data-exocord-composer-focus="1"] [class*="channelTextArea"]::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--exo-beam-angle, 0deg),
+    transparent 0%,
+    var(--exo-accent) 12%,
+    transparent 28%,
+    transparent 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+  animation: exo-beam-spin var(--exo-beam-speed, 2.8s) linear infinite;
+}
+
+html[data-exocord-game-mode="1"] .exo-beam::before,
+html[data-exocord-reduced-motion="1"] .exo-beam::before,
+html[data-exocord-game-mode="1"] [data-exocord-beam="1"]::before,
+html[data-exocord-reduced-motion="1"] [data-exocord-beam="1"]::before,
+html[data-exocord-game-mode="1"] [class*="channelTextArea"]::before,
+html[data-exocord-reduced-motion="1"] [class*="channelTextArea"]::before {
+  animation: none;
+  background: linear-gradient(90deg, transparent, var(--exo-accent-dim), transparent);
+}
