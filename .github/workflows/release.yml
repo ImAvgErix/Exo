@@ -1,4 +1,4 @@
-﻿name: Release
+name: Release
 
 # Stable releases are built once from the immutable event SHA. The validated
 # installer and its checksum cross the job boundary as one Actions artifact;
@@ -198,7 +198,7 @@ jobs:
       # built from exactly this commit by GitHub's build service, so users can
       # verify the artifact's origin independently of the release page.
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: |
             release/ExoHub.exe
