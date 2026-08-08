@@ -1,11 +1,12 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Publish Exo and create a GitHub Release with ONLY Exo.exe (double-click install).
+  Publish Exo Hub and create a GitHub Release with ExoHub.exe (double-click install).
+  Also uploads Exo.exe as a legacy alias for older docs/mirrors.
 #>
 param(
     [string]$Configuration = 'Release',
-    [string]$Repo = 'ImAvgErix/Exo',
+    [string]$Repo = 'ImAvgErix/ExoHub',
     [string]$NotesFile = '',
     [string]$Notes = ''
 )
@@ -41,11 +42,12 @@ if ($Version -notmatch '^\d+\.\d+\.\d+$') {
 }
 $Tag = "v$Version"
 $ReleaseDir = Join-Path $Root 'release'
-$SfxPath = Join-Path $ReleaseDir 'Exo.exe'
+$SfxPath = Join-Path $ReleaseDir 'ExoHub.exe'
+$LegacySfxPath = Join-Path $ReleaseDir 'Exo.exe'
 
 function Get-LatestReleaseInfo {
     $headers = @{
-        'User-Agent' = 'Exo-Release/1.0'
+        'User-Agent' = 'ExoHub-Release/1.0'
         'Accept'     = 'application/vnd.github+json'
     }
     # CI runners share anonymous API rate limits; authenticate when a token is available.
@@ -55,7 +57,10 @@ function Get-LatestReleaseInfo {
 
 function Test-LatestIsTag([string]$ExpectedTag, [string]$ExpectedSha256) {
     $latest = Get-LatestReleaseInfo
-    $asset = @($latest.assets) | Where-Object { $_.name -eq 'Exo.exe' } | Select-Object -First 1
+    $asset = @($latest.assets) |
+        Where-Object { $_.name -in @('ExoHub.exe', 'Exo.exe') } |
+        Sort-Object { if ($_.name -eq 'ExoHub.exe') { 0 } else { 1 } } |
+        Select-Object -First 1
     $assetNames = @($latest.assets | ForEach-Object { $_.name })
     $remoteSha256 = if ($asset -and ([string]$asset.digest) -match '^sha256:([0-9a-fA-F]{64})$') {
         $Matches[1].ToLowerInvariant()
@@ -71,12 +76,19 @@ function Test-LatestIsTag([string]$ExpectedTag, [string]$ExpectedSha256) {
 
 
 Write-Host ''
-Write-Host "  Exo release  -  $Tag  -  Exo.exe only" -ForegroundColor Cyan
+Write-Host "  Exo Hub release  -  $Tag  -  ExoHub.exe (+ legacy Exo.exe)" -ForegroundColor Cyan
 Write-Host ''
 
 & (Join-Path $Root 'Publish-Exo.ps1') -Configuration $Configuration
+if (-not (Test-Path $SfxPath) -and (Test-Path $LegacySfxPath)) {
+    # Publish still writes Exo.exe by default; promote to ExoHub.exe.
+    Copy-Item -LiteralPath $LegacySfxPath -Destination $SfxPath -Force
+}
 if (-not (Test-Path $SfxPath)) {
-    throw "Missing Exo.exe: $SfxPath"
+    throw "Missing ExoHub.exe: $SfxPath"
+}
+if (-not (Test-Path $LegacySfxPath)) {
+    Copy-Item -LiteralPath $SfxPath -Destination $LegacySfxPath -Force
 }
 $SfxSha256 = (Get-FileHash -LiteralPath $SfxPath -Algorithm SHA256).Hash.ToLowerInvariant()
 
@@ -86,10 +98,10 @@ if ($NotesFile -and (Test-Path $NotesFile)) {
     $body = $Notes.Trim()
 } else {
     $body = @"
-## Exo $Version
+## Exo Hub $Version
 
 ### Download
-**[Exo.exe](https://github.com/$Repo/releases/latest/download/Exo.exe)** - double-click to install and launch.
+**[ExoHub.exe](https://github.com/$Repo/releases/latest/download/ExoHub.exe)** - double-click to install and launch.
 
 Installs to ``%LocalAppData%\Exo\app``.
 
@@ -117,19 +129,21 @@ if ($remoteTagExists) {
     throw "Remote tag $Tag already exists. Release tags are immutable; bump VERSION."
 }
 
-$ChecksumPath = Join-Path $ReleaseDir 'Exo.exe.sha256'
-"$SfxSha256  Exo.exe" | Set-Content -LiteralPath $ChecksumPath -Encoding Ascii -NoNewline
+$ChecksumPath = Join-Path $ReleaseDir 'ExoHub.exe.sha256'
+"$SfxSha256  ExoHub.exe" | Set-Content -LiteralPath $ChecksumPath -Encoding Ascii -NoNewline
+$LegacyChecksumPath = Join-Path $ReleaseDir 'Exo.exe.sha256'
+"$SfxSha256  Exo.exe" | Set-Content -LiteralPath $LegacyChecksumPath -Encoding Ascii -NoNewline
 
 Write-Host "[*] Creating immutable GitHub Release $Tag..." -ForegroundColor Cyan
-gh release create $Tag $SfxPath $ChecksumPath `
+gh release create $Tag $SfxPath $LegacySfxPath $ChecksumPath $LegacyChecksumPath `
     --repo $Repo `
-    --title "Exo $Version" `
+    --title "Exo Hub $Version" `
     --notes $body `
     --latest `
     --target $HeadSha
 if ($LASTEXITCODE -ne 0) { throw "gh release create failed for $Tag" }
 
-Write-Host "[*] Verifying API /releases/latest == $Tag + Exo.exe ..." -ForegroundColor Cyan
+Write-Host "[*] Verifying API /releases/latest == $Tag + ExoHub.exe ..." -ForegroundColor Cyan
 $ok = $false
 $last = $null
 for ($i = 1; $i -le 12; $i++) {
@@ -143,11 +157,11 @@ for ($i = 1; $i -le 12; $i++) {
     }
 }
 if (-not $ok) {
-    throw "RELEASE VERIFY FAILED: /releases/latest is '$($last.Tag)' without Exo.exe."
+    throw "RELEASE VERIFY FAILED: /releases/latest is '$($last.Tag)' without ExoHub.exe."
 }
 
 
 Write-Host ''
 Write-Host "[+] VERIFIED Latest: https://github.com/$Repo/releases/tag/$Tag" -ForegroundColor Green
-Write-Host "    Download: https://github.com/$Repo/releases/latest/download/Exo.exe" -ForegroundColor Green
+Write-Host "    Download: https://github.com/$Repo/releases/latest/download/ExoHub.exe" -ForegroundColor Green
 Write-Host ''

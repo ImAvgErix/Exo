@@ -1,6 +1,6 @@
 # Discord Optimizer Kit
 
-Bundled with [Exo](https://github.com/ImAvgErix/Exo). Prefer the app:
+Bundled with [Exo Hub](https://github.com/ImAvgErix/ExoHub). Prefer the app:
 
 The full profile uses Equicord + Exo Host (stock Discord shell
 with SKIP_HOST_UPDATE and lean chromium flags — OpenASAR is no longer used),

@@ -429,7 +429,14 @@ $Protected = @(
 )
 $DiscordSetupUrl = 'https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64'
 # Modern Discord (1.0.92xx+) no longer ships discord_dispatch / discord_modules.
-# Only require modules that always exist on a healthy stable install.
+# Family prefixes only — Discord bumps trailing -N (desktop_core-1 → desktop_core-2).
+$RequiredModulePrefixes = @(
+    'discord_desktop_core',
+    'discord_utils',
+    'discord_voice',
+    'discord_media'
+)
+# Legacy exact names kept for older script paths that still join full folder names.
 $RequiredModules = @(
     'discord_desktop_core-1',
     'discord_utils-1',
@@ -919,7 +926,7 @@ exit 0
     Write-Host $_.Exception.Message -ForegroundColor Red
     Write-Host ''
     Write-Host '  If Discord will not open, paste this into PowerShell to restore it:' -ForegroundColor Yellow
-    Write-Host '    irm "https://raw.githubusercontent.com/ImAvgErix/Exo/main/Repair-Discord.ps1" | iex' -ForegroundColor Cyan
+    Write-Host '    irm "https://raw.githubusercontent.com/ImAvgErix/ExoHub/main/Repair-Discord.ps1" | iex' -ForegroundColor Cyan
     Write-Host ''
     Write-Host "  Error log: $(Join-Path $LogDir 'last-error.log')" -ForegroundColor Yellow
     if ($Script:LogPath) {

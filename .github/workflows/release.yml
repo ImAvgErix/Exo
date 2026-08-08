@@ -85,10 +85,14 @@ jobs:
         shell: pwsh
         run: |
           ./Publish-Exo.ps1 -Configuration Release
-          if (-not (Test-Path release/Exo.exe -PathType Leaf)) {
-            throw 'Publish-Exo.ps1 did not produce release/Exo.exe.'
+          if (-not (Test-Path release/ExoHub.exe -PathType Leaf)) {
+            throw 'Publish-Exo.ps1 did not produce release/ExoHub.exe.'
           }
-          $hash = (Get-FileHash release/Exo.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if (-not (Test-Path release/Exo.exe -PathType Leaf)) {
+            Copy-Item release/ExoHub.exe release/Exo.exe -Force
+          }
+          $hash = (Get-FileHash release/ExoHub.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  ExoHub.exe" | Set-Content release/ExoHub.exe.sha256 -Encoding ascii -NoNewline
           "$hash  Exo.exe" | Set-Content release/Exo.exe.sha256 -Encoding ascii -NoNewline
 
       - name: Generate SBOM for the release
@@ -110,6 +114,8 @@ jobs:
         with:
           name: exo-release-${{ github.sha }}
           path: |
+            release/ExoHub.exe
+            release/ExoHub.exe.sha256
             release/Exo.exe
             release/Exo.exe.sha256
             release/Exo.sbom.json
@@ -143,8 +149,10 @@ jobs:
             throw "Event tag '${{ github.ref_name }}' does not match VERSION tag '$tag'."
           }
 
-          $expected = ((Get-Content release/Exo.exe.sha256 -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
-          $actual = (Get-FileHash release/Exo.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $checksumFile = if (Test-Path release/ExoHub.exe.sha256) { 'release/ExoHub.exe.sha256' } else { 'release/Exo.exe.sha256' }
+          $installerFile = if (Test-Path release/ExoHub.exe) { 'release/ExoHub.exe' } else { 'release/Exo.exe' }
+          $expected = ((Get-Content $checksumFile -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+          $actual = (Get-FileHash $installerFile -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($actual -ne $expected) { throw "Artifact checksum mismatch: expected $expected, got $actual." }
 
           gh release view $tag --repo '${{ github.repository }}' 1>$null 2>$null
@@ -153,18 +161,22 @@ jobs:
           }
 
           $notes = @"
-          ## Exo $version
+          ## Exo Hub $version
 
-          **[Exo.exe](https://github.com/${{ github.repository }}/releases/download/$tag/Exo.exe)** — double-click to install and launch.
+          **[ExoHub.exe](https://github.com/${{ github.repository }}/releases/download/$tag/ExoHub.exe)** — double-click to install and launch.
 
           Validated commit: `${{ github.sha }}`
           SHA-256: `$actual`
           SBOM: `Exo.sbom.json` (.NET) + `Exo.UI.sbom.json` (UI), attached to this release.
           "@
-          gh release create $tag release/Exo.exe release/Exo.exe.sha256 `
-            release/Exo.sbom.json release/Exo.UI.sbom.json `
+          $assets = @(
+            'release/ExoHub.exe', 'release/ExoHub.exe.sha256',
+            'release/Exo.exe', 'release/Exo.exe.sha256',
+            'release/Exo.sbom.json', 'release/Exo.UI.sbom.json'
+          ) | Where-Object { Test-Path $_ }
+          gh release create $tag @assets `
             --repo '${{ github.repository }}' `
-            --title "Exo $version" `
+            --title "Exo Hub $version" `
             --notes $notes `
             --latest `
             --target '${{ github.sha }}'
@@ -172,11 +184,15 @@ jobs:
 
           $verifyDir = Join-Path $env:RUNNER_TEMP 'exo-release-verify'
           New-Item -ItemType Directory -Path $verifyDir -Force | Out-Null
-          gh release download $tag --repo '${{ github.repository }}' --pattern Exo.exe --dir $verifyDir --clobber
+          gh release download $tag --repo '${{ github.repository }}' --pattern ExoHub.exe --dir $verifyDir --clobber
+          if ($LASTEXITCODE -ne 0) {
+            gh release download $tag --repo '${{ github.repository }}' --pattern Exo.exe --dir $verifyDir --clobber
+          }
           if ($LASTEXITCODE -ne 0) { throw 'Could not download the published installer for verification.' }
-          $remote = (Get-FileHash (Join-Path $verifyDir 'Exo.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
+          $verifyExe = @(Get-ChildItem $verifyDir -Filter '*.exe' | Select-Object -First 1).FullName
+          $remote = (Get-FileHash $verifyExe -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($remote -ne $expected) { throw "Published installer checksum mismatch: expected $expected, got $remote." }
-          Write-Host "Published immutable Exo $version from ${{ github.sha }} ($remote)." -ForegroundColor Green
+          Write-Host "Published immutable Exo Hub $version from ${{ github.sha }} ($remote)." -ForegroundColor Green
 
       # SLSA-style provenance: the published installer is attested to have been
       # built from exactly this commit by GitHub's build service, so users can
@@ -184,4 +200,6 @@ jobs:
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: release/Exo.exe
+          subject-path: |
+            release/ExoHub.exe
+            release/Exo.exe

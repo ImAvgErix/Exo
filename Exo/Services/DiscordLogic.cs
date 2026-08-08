@@ -254,6 +254,68 @@ public static partial class DiscordLogic
         }
     }
 
+    /// <summary>
+    /// Module family prefixes Discord always needs for voice/media/desktop. Discord bumps the
+    /// trailing -<c>N</c> (e.g. <c>discord_desktop_core-1</c> → <c>discord_desktop_core-2</c>);
+    /// hard-coding <c>-1</c> falsely red-flagged healthy modern installs as "Core modules" off.
+    /// </summary>
+    public static readonly string[] RequiredRuntimeModulePrefixes =
+    {
+        "discord_desktop_core",
+        "discord_utils",
+        "discord_voice",
+        "discord_media",
+    };
+
+    /// <summary>
+    /// True when each required runtime family has at least one <c>{prefix}-*</c> directory
+    /// under <paramref name="modulesPath"/>.
+    /// </summary>
+    public static bool HasRequiredRuntimeModules(string? modulesPath)
+    {
+        return MissingRequiredRuntimeModules(modulesPath).Count == 0;
+    }
+
+    /// <summary>
+    /// Returns family prefixes that have no matching <c>{prefix}-*</c> directory (empty list = healthy).
+    /// </summary>
+    public static IReadOnlyList<string> MissingRequiredRuntimeModules(string? modulesPath)
+    {
+        if (string.IsNullOrWhiteSpace(modulesPath) || !Directory.Exists(modulesPath))
+            return RequiredRuntimeModulePrefixes.ToArray();
+
+        string[] dirs;
+        try
+        {
+            dirs = Directory.GetDirectories(modulesPath);
+        }
+        catch
+        {
+            return RequiredRuntimeModulePrefixes.ToArray();
+        }
+
+        var missing = new List<string>(RequiredRuntimeModulePrefixes.Length);
+        foreach (var prefix in RequiredRuntimeModulePrefixes)
+        {
+            var found = false;
+            foreach (var dir in dirs)
+            {
+                var name = Path.GetFileName(dir);
+                if (name is null) continue;
+                // Exact family match: "discord_voice-1", "discord_voice-2", …
+                // Do not accept "discord_voice_extra-1" as the voice core.
+                if (name.Equals(prefix, StringComparison.OrdinalIgnoreCase) ||
+                    name.StartsWith(prefix + "-", StringComparison.OrdinalIgnoreCase))
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) missing.Add(prefix);
+        }
+        return missing;
+    }
+
     /// <summary>Forbidden apply markers (folklore / scheduled task noise).</summary>
     public static readonly string[] ForbiddenApplyPatterns =
     {

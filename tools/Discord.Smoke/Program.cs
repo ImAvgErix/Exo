@@ -429,6 +429,94 @@ Expect("missing module dir no payload", !DiscordLogic.ModuleDirHasPayload(null))
 Expect("missing module path no payload",
     !DiscordLogic.ModuleDirHasPayload(Path.Combine(Path.GetTempPath(), "no-such-exo-mod")));
 
+// Runtime families must accept Discord's versioned suffixes (desktop_core-2, not only -1).
+{
+    var runtimeTree = Path.Combine(Path.GetTempPath(), "exo-discord-rt-" + Guid.NewGuid().ToString("N"));
+    var modRoot = Path.Combine(runtimeTree, "modules");
+    Directory.CreateDirectory(modRoot);
+    try
+    {
+        Expect("empty modules path missing all runtime families",
+            DiscordLogic.MissingRequiredRuntimeModules(modRoot).Count == DiscordLogic.RequiredRuntimeModulePrefixes.Length);
+        Expect("empty modules path not healthy",
+            !DiscordLogic.HasRequiredRuntimeModules(modRoot));
+
+        Directory.CreateDirectory(Path.Combine(modRoot, "discord_desktop_core-2"));
+        Directory.CreateDirectory(Path.Combine(modRoot, "discord_utils-1"));
+        Directory.CreateDirectory(Path.Combine(modRoot, "discord_voice-1"));
+        Directory.CreateDirectory(Path.Combine(modRoot, "discord_media-1"));
+        Expect("desktop_core-2 counts as present (not stuck on -1)",
+            DiscordLogic.HasRequiredRuntimeModules(modRoot));
+        Expect("no missing families when -2 core present",
+            DiscordLogic.MissingRequiredRuntimeModules(modRoot).Count == 0);
+
+        // Remove voice family — must report the prefix, not a hard-coded -1 name.
+        Directory.Delete(Path.Combine(modRoot, "discord_voice-1"), true);
+        var missingVoice = DiscordLogic.MissingRequiredRuntimeModules(modRoot);
+        Expect("missing voice family listed by prefix",
+            missingVoice.Count == 1 && missingVoice[0] == "discord_voice");
+        Expect("partial runtime not healthy",
+            !DiscordLogic.HasRequiredRuntimeModules(modRoot));
+
+        // Prefix must not accept unrelated lookalikes.
+        Directory.Delete(Path.Combine(modRoot, "discord_desktop_core-2"), true);
+        Directory.CreateDirectory(Path.Combine(modRoot, "discord_desktop_core_extra-1"));
+        Directory.CreateDirectory(Path.Combine(modRoot, "discord_voice-9"));
+        Expect("lookalike desktop_core_extra does not satisfy desktop_core",
+            DiscordLogic.MissingRequiredRuntimeModules(modRoot).Contains("discord_desktop_core"));
+    }
+    finally
+    {
+        try { Directory.Delete(runtimeTree, true); } catch { }
+    }
+}
+
+// Drive the shipped PowerShell classifier the detect script actually dotsources.
+if (File.Exists(corePs1))
+{
+    var psRuntime = Path.Combine(Path.GetTempPath(), "exo-ps-rt-" + Guid.NewGuid().ToString("N"));
+    var psMods = Path.Combine(psRuntime, "modules");
+    Directory.CreateDirectory(Path.Combine(psMods, "discord_desktop_core-2"));
+    Directory.CreateDirectory(Path.Combine(psMods, "discord_utils-3"));
+    Directory.CreateDirectory(Path.Combine(psMods, "discord_voice-1"));
+    Directory.CreateDirectory(Path.Combine(psMods, "discord_media-2"));
+    try
+    {
+        var ps = $@"
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+. '{corePs1.Replace("'", "''")}'
+$ok = Test-DiscOptRuntimeModulesPresent -ModulesPath '{psMods.Replace("'", "''")}'
+$missing = @(Get-DiscOptMissingRuntimeModules -ModulesPath '{psMods.Replace("'", "''")}')
+if (-not $ok) {{ throw 'PS runtime healthy expected for -2/-3 suffixes' }}
+if ($missing.Count -ne 0) {{ throw ('PS missing unexpected: ' + ($missing -join ',')) }}
+'PASS  ps runtime version-agnostic'
+";
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "pwsh",
+            Arguments = "-NoProfile -Command -",
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        using var proc = System.Diagnostics.Process.Start(psi)!;
+        proc.StandardInput.Write(ps);
+        proc.StandardInput.Close();
+        var stdout = proc.StandardOutput.ReadToEnd();
+        var stderr = proc.StandardError.ReadToEnd();
+        proc.WaitForExit(30000);
+        Expect("ps DiscordDetectCore runtime version-agnostic",
+            proc.ExitCode == 0 && stdout.Contains("PASS  ps runtime version-agnostic"),
+            stderr + stdout);
+    }
+    finally
+    {
+        try { Directory.Delete(psRuntime, true); } catch { }
+    }
+}
+
 // --- Invoke shipped DiscordDetectCore debloat + fixture tree matching detect collection ---
 if (File.Exists(corePs1))
 {

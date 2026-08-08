@@ -51,16 +51,20 @@ Expect("release validates and publishes one immutable checked-out SHA",
     && !releaseWorkflow.Contains("ref: main", StringComparison.Ordinal)
     && releaseWorkflow.Contains("actions/upload-artifact", StringComparison.Ordinal)
     && releaseWorkflow.Contains("actions/download-artifact", StringComparison.Ordinal)
-    && releaseWorkflow.Contains("Exo.exe.sha256", StringComparison.Ordinal)
+    && (releaseWorkflow.Contains("ExoHub.exe.sha256", StringComparison.Ordinal)
+        || releaseWorkflow.Contains("Exo.exe.sha256", StringComparison.Ordinal))
     && releaseWorkflow.Contains("gh release create", StringComparison.Ordinal)
     && !releaseWorkflow.Contains("-ReplaceExisting", StringComparison.Ordinal)
     && !releaseWorkflow.Contains("-PruneOldReleases", StringComparison.Ordinal));
+Expect("release ships ExoHub.exe as the product installer",
+    releaseWorkflow.Contains("ExoHub.exe", StringComparison.Ordinal));
 
 var prereleaseWorkflow = File.ReadAllText(Path.Combine(repo, ".github", "workflows", "prerelease.yml"));
 Expect("prerelease publishes the tested SHA with a verifiable checksum",
     prereleaseWorkflow.Contains("$sha = (git rev-parse HEAD).Trim()", StringComparison.Ordinal)
     && prereleaseWorkflow.Contains("--target $sha", StringComparison.Ordinal)
-    && prereleaseWorkflow.Contains("Exo.exe.sha256", StringComparison.Ordinal)
+    && (prereleaseWorkflow.Contains("ExoHub.exe.sha256", StringComparison.Ordinal)
+        || prereleaseWorkflow.Contains("Exo.exe.sha256", StringComparison.Ordinal))
     && prereleaseWorkflow.Contains("Get-FileHash", StringComparison.Ordinal));
 
 var releaseScript = File.ReadAllText(Path.Combine(repo, "Release-Exo.ps1"));
@@ -68,7 +72,23 @@ Expect("local release helper preserves immutable history by default",
     !releaseScript.Contains("[switch]$PruneOldReleases = $true", StringComparison.Ordinal)
     && !releaseScript.Contains("gh release delete", StringComparison.Ordinal)
     && !releaseScript.Contains("git push origin \":refs/tags/$t\"", StringComparison.Ordinal));
+Expect("local release defaults to ExoHub repo + ExoHub.exe",
+    releaseScript.Contains("ImAvgErix/ExoHub", StringComparison.Ordinal)
+    && releaseScript.Contains("ExoHub.exe", StringComparison.Ordinal));
 Expect("repo root", Directory.Exists(repo));
+
+// Installer / update honesty: the published asset is ExoHub.exe. Bootstrap and
+// in-app update must accept it (and still tolerate legacy Exo.exe mirrors).
+var installScript = File.ReadAllText(Path.Combine(repo, "Install-Exo.ps1"));
+Expect("Install-Exo targets ImAvgErix/ExoHub",
+    installScript.Contains("ImAvgErix/ExoHub", StringComparison.Ordinal));
+Expect("Install-Exo accepts ExoHub.exe (or legacy Exo.exe)",
+    installScript.Contains("ExoHub.exe", StringComparison.Ordinal)
+    && installScript.Contains("Exo.exe", StringComparison.Ordinal));
+var updateService = File.ReadAllText(Path.Combine(repo, "Exo", "Services", "GitHubUpdateService.cs"));
+Expect("in-app update prefers ExoHub.exe asset",
+    updateService.Contains("ExoHub.exe", StringComparison.OrdinalIgnoreCase)
+    && updateService.Contains("Exo.exe", StringComparison.OrdinalIgnoreCase));
 
 // --- Internet: generated apply + repair share safety/report contract ---
 var media = new NetworkMediaProfile
@@ -678,7 +698,11 @@ if (steamBytes > 80_000 || nvBytes > 80_000)
     Expect("ExoPowerPlan.cs exists", File.Exists(planPath));
     if (File.Exists(planPath))
     {
-        var plan = File.ReadAllText(planPath);
+        // Include Honesty partial — fixed GUID / applied gates live there so main
+        // ExoPowerPlan.cs stays topology-focused.
+        var planHonestyPath = Path.Combine(repo, "Exo", "Services", "ExoPowerPlan.Honesty.cs");
+        var plan = File.ReadAllText(planPath)
+                   + (File.Exists(planHonestyPath) ? File.ReadAllText(planHonestyPath) : "");
 
         // The minimum processor state is chassis-dependent, and that is the whole contract.
         // These two assertions previously pinned a flat 5 as correct; that was the conservative
@@ -753,8 +777,11 @@ if (steamBytes > 80_000 || nvBytes > 80_000)
             $"active@{activeIdx} delete@{deleteIdx}");
 
         // A fixed GUID, so a second Apply reuses the plan instead of stacking duplicates.
+        // Constant lives in ExoPowerPlan.Honesty.cs (pure partial) so Contracts.Smoke can call it.
+        var honesty = File.ReadAllText(Path.Combine(repo, "Exo", "Services", "ExoPowerPlan.Honesty.cs"));
         Expect("the Exo plan uses a fixed GUID",
-            plan.Contains("ExoSchemeGuid = \"7ae4b8a5", StringComparison.Ordinal));
+            honesty.Contains("ExoSchemeGuid = \"7ae4b8a5", StringComparison.Ordinal)
+            || plan.Contains("ExoSchemeGuid = \"7ae4b8a5", StringComparison.Ordinal));
 
         // The plan name is interpolated into a powercfg command line.
         Expect("the plan name is sanitised before reaching a command line",
@@ -937,6 +964,43 @@ if (steamBytes > 80_000 || nvBytes > 80_000)
     // Pure version / socket / strip rules without a machine.
     Expect("version compare 7.01 > 6.10",
         ChipsetDriverLogic.CompareVersions("7.01.08.129", "6.10.22.527") > 0);
+
+    // Legacy Exo power plans — drive the real shipped pure helpers (ExoPowerPlan.Honesty.cs).
+    Expect("legacy Exo Extreme GUID is recognized",
+        ExoPowerPlan.IsLegacyExoSchemeGuid("a1111111-e80e-4e0e-a111-0e0e0e0e0e01"));
+    Expect("legacy Exo LiteOS GUID is recognized",
+        ExoPowerPlan.IsLegacyExoSchemeGuid("77777777-7777-7777-7777-777777777777"));
+    Expect("current Exo plan GUID is not legacy",
+        !ExoPowerPlan.IsLegacyExoSchemeGuid(ExoPowerPlan.ExoSchemeGuid));
+    Expect("current Exo plan is Exo family",
+        ExoPowerPlan.IsExoFamilyScheme(ExoPowerPlan.ExoSchemeGuid, "Exo - AMD 6C"));
+    Expect("legacy Extreme is Exo family but not current",
+        ExoPowerPlan.IsExoFamilyScheme("a1111111-e80e-4e0e-a111-0e0e0e0e0e01", "Exo Extreme (AM4 Zen3)")
+        && ExoPowerPlan.IsLegacyExoSchemeGuid("a1111111-e80e-4e0e-a111-0e0e0e0e0e01"));
+    Expect("Balanced is not Exo family",
+        !ExoPowerPlan.IsExoFamilyScheme("381b4222-f694-41f0-9685-ff5bb260df2e", "Balanced"));
+    var powerPlanDetectSrc = File.ReadAllText(Path.Combine(repo, "Exo", "Services", "ExoPowerPlan.cs"));
+    Expect("detect names legacy plan migration (not false Applied)",
+        powerPlanDetectSrc.Contains("Older Exo plan is still active", StringComparison.Ordinal)
+        || powerPlanDetectSrc.Contains("Older Exo plan is active", StringComparison.Ordinal));
+    Expect("live-verify accepts Exo-family schemes",
+        File.ReadAllText(Path.Combine(repo, "tools", "Verify-LiveApplied.ps1"))
+            .Contains("exoFamily", StringComparison.OrdinalIgnoreCase));
+
+    // Update/install honesty: release asset is ExoHub.exe after the product rename.
+    var updateSvc = File.ReadAllText(Path.Combine(repo, "Exo", "Services", "GitHubUpdateService.cs"));
+    Expect("update service prefers ExoHub.exe asset",
+        updateSvc.Contains("ExoHub.exe", StringComparison.Ordinal));
+    Expect("update service still accepts legacy Exo.exe",
+        updateSvc.Contains("Exo.exe", StringComparison.Ordinal));
+    Expect("update service targets ExoHub releases",
+        updateSvc.Contains("ImAvgErix/ExoHub", StringComparison.Ordinal));
+    var installPs1 = File.ReadAllText(Path.Combine(repo, "Install-Exo.ps1"));
+    Expect("Install-Exo prefers ExoHub.exe",
+        installPs1.Contains("ExoHub.exe", StringComparison.Ordinal)
+        && installPs1.Contains("ImAvgErix/ExoHub", StringComparison.Ordinal));
+    Expect("internet module logo ships under assets/logos",
+        File.Exists(Path.Combine(repo, "ui", "src", "assets", "logos", "internet.png")));
     Expect("5600X maps to AM4",
         ChipsetDriverLogic.InferSocket("AMD Ryzen 5 5600X 6-Core Processor", "amd") == "AM4");
     Expect("7800X3D maps to AM5",

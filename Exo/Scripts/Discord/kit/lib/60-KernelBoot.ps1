@@ -325,7 +325,7 @@ function Confirm-DiscordBootsAfterMods([string]$AppDir) {
     }
 
     Stop-Discord
-    throw 'Discord failed to load even in stock mode. Use Repair Discord in Exo, or: irm "https://raw.githubusercontent.com/ImAvgErix/Exo/main/Repair-Discord.ps1" | iex'
+    throw 'Discord failed to load even in stock mode. Use Repair Discord in Exo, or: irm "https://raw.githubusercontent.com/ImAvgErix/ExoHub/main/Repair-Discord.ps1" | iex'
 }
 
 function Disable-Fso([string]$AppDir) {

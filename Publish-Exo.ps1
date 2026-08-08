@@ -24,13 +24,15 @@ if ($Version -notmatch '^\d+\.\d+\.\d+$') {
 
 $ReleaseDir = Join-Path $Root 'release'
 $ZipPath = Join-Path $ReleaseDir "Exo-$Version-win-x64.zip"
-$SfxPath = Join-Path $ReleaseDir 'Exo.exe'
+# Product installer name is ExoHub.exe; keep Exo.exe as a same-bytes legacy alias.
+$SfxPath = Join-Path $ReleaseDir 'ExoHub.exe'
+$LegacySfxPath = Join-Path $ReleaseDir 'Exo.exe'
 $OutDir = Join-Path $Root "publish\Exo-win-x64-v$Version"
 $LegacyOutDir = Join-Path $Root 'publish\Exo-win-x64'
 $SfxSource = Join-Path $Root 'tools\ExoSfx.cs'
 
 Write-Host ''
-Write-Host "  Exo publish  -  v$Version  -  self-contained win-x64 -> Exo.exe" -ForegroundColor Cyan
+Write-Host "  Exo Hub publish  -  v$Version  -  self-contained win-x64 -> ExoHub.exe" -ForegroundColor Cyan
 Write-Host ''
 
 function Clear-PublishDir([string]$Path) {
@@ -110,7 +112,7 @@ using System.Reflection;
             "`"$assemblyInfo`""
         ) | Set-Content -LiteralPath $rsp -Encoding ASCII
 
-        Write-Host '[*] Building self-extracting Exo.exe...' -ForegroundColor DarkGray
+        Write-Host '[*] Building self-extracting ExoHub.exe...' -ForegroundColor DarkGray
         $prev = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
         $output = & $csc ("@" + $rsp) 2>&1
@@ -122,8 +124,13 @@ using System.Reflection;
         }
 
         Copy-Item -LiteralPath $outCopy -Destination $OutputExe -Force
+        # Legacy alias: same bytes as ExoHub.exe so older docs and Install-Exo mirrors keep working.
+        $legacyOut = Join-Path (Split-Path -Parent $OutputExe) 'Exo.exe'
+        if ($OutputExe -ne $legacyOut) {
+            Copy-Item -LiteralPath $OutputExe -Destination $legacyOut -Force
+        }
         $sizeMb = [math]::Round((Get-Item $OutputExe).Length / 1MB, 1)
-        Write-Host "[+] Exo.exe (double-click installer): $OutputExe ($sizeMb MB)" -ForegroundColor Green
+        Write-Host "[+] ExoHub.exe (double-click installer): $OutputExe ($sizeMb MB)" -ForegroundColor Green
     } finally {
         Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
     }

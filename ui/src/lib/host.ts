@@ -756,7 +756,7 @@ function mockCall<T>(method: string, params?: Record<string, unknown>): Promise<
       checkForUpdatesOnLaunch: true,
       welcomePromptSeen: true,
       buyMeACoffeeUrl: 'https://www.buymeacoffee.com/UhhErix',
-      issuesUrl: 'https://github.com/ImAvgErix/Exo/issues',
+      issuesUrl: 'https://github.com/ImAvgErix/ExoHub/issues',
       textColour: (params?.textColour as TextColour) || 'white',
       textSize: (params?.textSize as TextSize) || 'normal',
       experimentalDefaults: {},

@@ -451,7 +451,7 @@ internal static class Program
                     IntPtr.Zero,
                     "Exo install failed:\n\n" + detail +
                     "\n\nLog: %LocalAppData%\\Exo\\install.log\n" +
-                    "Download again from:\nhttps://github.com/ImAvgErix/Exo/releases/latest",
+                    "Download again from:\nhttps://github.com/ImAvgErix/ExoHub/releases/latest",
                     "Exo",
                     0x10);
             }

@@ -322,10 +322,15 @@ if (-not (Test-Path $discordRoot)) {
             -StateDebloatVerifiedSameApp:$stateMatchesApp
         Add-Feature 'Slim client cleanup' 'Old builds, clip hooks, game SDK leftovers, extra languages, and junk caches removed  -  your install stays light.' $debloatOk
 
-        $missingRuntime = @(@('discord_desktop_core-1', 'discord_utils-1', 'discord_voice-1', 'discord_media-1') |
-            Where-Object { -not (Test-Path -LiteralPath (Join-Path $modPath $_)) })
+        # Version-agnostic: Discord 1.0.92xx ships discord_desktop_core-2 (not -1).
+        $missingRuntime = @(Get-DiscOptMissingRuntimeModules -ModulesPath $modPath)
         $runtimeOk = $missingRuntime.Count -eq 0
-        Add-Feature 'Core modules healthy' 'Voice, media, and desktop modules are intact so Discord stays fully working.' $runtimeOk
+        $runtimeDetail = if ($runtimeOk) {
+            'Voice, media, and desktop modules are intact so Discord stays fully working.'
+        } else {
+            "Missing core module families: $($missingRuntime -join ', ')."
+        }
+        Add-Feature 'Core modules healthy' $runtimeDetail $runtimeOk
 
         $amoledOk = $false
         $leanPluginsOk = $false

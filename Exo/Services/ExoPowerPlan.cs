@@ -30,14 +30,8 @@ namespace Exo.Services;
 /// a setting is not a machine to write it to anyway, and probing is what makes this work on
 /// hardware nobody here has seen.
 /// </summary>
-internal static class ExoPowerPlan
+internal static partial class ExoPowerPlan
 {
-    /// <summary>
-    /// Fixed so a second Apply reuses the same plan instead of stacking duplicates, and so
-    /// Detect can find it without matching on a display name the user may have renamed.
-    /// </summary>
-    internal const string ExoSchemeGuid = "7ae4b8a5-2c19-4d6f-9f3e-1b0c5d8e4a72";
-
     /// <summary>
     /// Ultimate Performance is Microsoft's own maximum-performance plan: no disk timeout, no
     /// PCIe link power saving, no core parking. It ships hidden on most SKUs, but
@@ -476,6 +470,8 @@ internal static class ExoPowerPlan
 
         var exists = PlanExists();
         var active = exists && PlanIsActive();
+        var activeGuid = NativeReg.GetValue("HKLM", SchemesRoot, "ActivePowerScheme")?.ToString();
+        var legacyActive = IsLegacyExoSchemeGuid(activeGuid);
 
         var drifted = new List<string>();
         if (exists)
@@ -488,13 +484,24 @@ internal static class ExoPowerPlan
             }
         }
 
+        // Only the current GUID with matching settings counts as Applied. A legacy Exo plan
+        // still running is honest Partial: the machine remembers Exo, but not this build.
         var ok = active && drifted.Count == 0;
-        rows.Add(("Exo power plan",
-            !exists ? "Not created yet."
-            : !active ? "Created, but Windows is running a different plan."
-            : drifted.Count > 0 ? $"Active, but {drifted.Count} setting(s) have been changed since."
-            : "Active and matching what Exo set.",
-            ok));
+        string planDetail;
+        if (!exists && legacyActive)
+            planDetail = "Older Exo plan is active — Apply creates the current Hub plan and switches to it.";
+        else if (!exists)
+            planDetail = "Not created yet.";
+        else if (legacyActive)
+            planDetail = "Older Exo plan is still active — re-Apply to migrate to the current Hub plan.";
+        else if (!active)
+            planDetail = "Created, but Windows is running a different plan.";
+        else if (drifted.Count > 0)
+            planDetail = $"Active, but {drifted.Count} setting(s) have been changed since.";
+        else
+            planDetail = "Active and matching what Exo set.";
+
+        rows.Add(("Exo power plan", planDetail, ok));
 
         if (cpu.IsHybrid)
         {

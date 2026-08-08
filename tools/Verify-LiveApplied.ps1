@@ -34,7 +34,16 @@ function Get-RegValue($path, $name) {
 # -- WINDOWS --------------------------------------------------------------
 Sec "WINDOWS"
 $wp = powercfg /getactivescheme 2>&1 | Out-String
-if ($wp -match 'Exo Competitive') { Ok "Active power plan: Exo Competitive*" } else { Bad "Power plan not Exo Competitive: $wp" }
+# Hub ships a fixed plan GUID (ExoPowerPlan.ExoSchemeGuid) and names it "Exo - …".
+# Older kits left "Exo Extreme" / LiteOS GUIDs active. Live-verify accepts any Exo-family
+# active scheme; Detect itself still requires the current GUID + settings for Applied.
+$exoFamilyGuid = $wp -match '7ae4b8a5-2c19-4d6f-9f3e-1b0c5d8e4a72|a1111111-e80e-4e0e-a111-0e0e0e0e0e01|77777777-7777-7777-7777-777777777777'
+$exoFamilyName = $wp -match 'Exo\s*(-|Extreme|Competitive|LiteOS)'
+if ($exoFamilyGuid -or $exoFamilyName) {
+  Ok "Active power plan is Exo family: $($wp.Trim())"
+} else {
+  Bad "Power plan is not an Exo-family scheme: $wp"
+}
 
 # Game Mode
 $gm1 = Test-RegValue 'HKCU:\Software\Microsoft\GameBar' 'AllowAutoGameMode' 1
@@ -100,19 +109,19 @@ else {
   } else { Warn "QoS policy root missing" }
 }
 
-# -- RIOT -----------------------------------------------------------------
+# -- RIOT (optional launcher kit - not a Hub module row) -----------------
 Sec "RIOT"
 $riotCmd = Join-Path $exo 'launchers\Riot-Exo.cmd'
 $riotGuard = Join-Path $exo 'riot-yield-guard.ps1'
 $riotRun = Get-RegValue 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' 'Exo-Riot-Yield'
-if (Test-Path $riotCmd) { Ok "Riot-Exo.cmd present" } else { Bad "Riot-Exo.cmd missing" }
-if (Test-Path $riotGuard) { Ok "riot-yield-guard.ps1 present" } else { Bad "riot-yield-guard.ps1 missing" }
+if (Test-Path $riotCmd) { Ok "Riot-Exo.cmd present" } else { Warn "Riot-Exo.cmd missing (optional - not a Hub module)" }
+if (Test-Path $riotGuard) { Ok "riot-yield-guard.ps1 present" } else { Warn "riot-yield-guard.ps1 missing (optional)" }
 if ($riotRun -and $riotRun -match 'yield-guard' -and $riotRun -match 'Hidden') {
   Ok "Run\Exo-Riot-Yield looks good"
 } elseif ($riotRun) {
-  Bad "Run\Exo-Riot-Yield bad value: $riotRun"
+  Warn "Run\Exo-Riot-Yield unexpected value: $riotRun"
 } else {
-  Bad "Run\Exo-Riot-Yield missing (yield not armed)"
+  Warn "Run\Exo-Riot-Yield not armed (optional launcher path)"
 }
 
 # GPU preference sample for VALORANT if present
@@ -135,16 +144,16 @@ if ($val) {
 $nRiot = (Get-ChildItem 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\QoS' -EA SilentlyContinue | Where-Object { $_.PSChildName -like 'Exo-Riot*' }).Count
 if ($nRiot -gt 0) { Ok "Riot DSCP policies: $nRiot" } else { Warn "No Exo-Riot* DSCP policies" }
 
-# -- EPIC -----------------------------------------------------------------
+# -- EPIC (optional launcher kit - not a Hub module row) -----------------
 Sec "EPIC"
 $epicCmd = Join-Path $exo 'launchers\Epic-Exo.cmd'
 $epicGuard = Join-Path $exo 'epic-yield-guard.ps1'
 $epicRun = Get-RegValue 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' 'Exo-Epic-Yield'
-if (Test-Path $epicCmd) { Ok "Epic-Exo.cmd present" } else { Bad "Epic-Exo.cmd missing" }
-if (Test-Path $epicGuard) { Ok "epic-yield-guard.ps1 present" } else { Bad "epic-yield-guard.ps1 missing" }
+if (Test-Path $epicCmd) { Ok "Epic-Exo.cmd present" } else { Warn "Epic-Exo.cmd missing (optional - not a Hub module)" }
+if (Test-Path $epicGuard) { Ok "epic-yield-guard.ps1 present" } else { Warn "epic-yield-guard.ps1 missing (optional)" }
 if ($epicRun -and $epicRun -match 'yield-guard' -and $epicRun -match 'Hidden') {
   Ok "Run\Exo-Epic-Yield looks good"
-} else { Bad "Run\Exo-Epic-Yield missing or bad: $epicRun" }
+} else { Warn "Run\Exo-Epic-Yield not armed (optional launcher path): $epicRun" }
 
 $nEpic = (Get-ChildItem 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\QoS' -EA SilentlyContinue | Where-Object { $_.PSChildName -like 'Exo-Epic*' }).Count
 if ($nEpic -gt 0) { Ok "Epic DSCP policies: $nEpic" } else { Warn "No Exo-Epic* DSCP policies" }

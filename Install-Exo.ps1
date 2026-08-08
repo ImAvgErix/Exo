@@ -1,7 +1,8 @@
-# Exo bootstrap installer.
-# Downloads the latest release Exo.exe from GitHub (verified: size + SHA-256 +
+# Exo Hub bootstrap installer.
+# Downloads the latest release SFX from GitHub (verified: size + SHA-256 +
 # version stamp), then runs it (installs to %LocalAppData%\Exo\app).
-# The SFX installer auto-installs machine deps: .NET 10 Desktop Runtime, WebView2,
+# Prefer ExoHub.exe; accept legacy Exo.exe so older mirrors still install.
+# The SFX auto-installs machine deps: .NET 10 Desktop Runtime, WebView2,
 # PowerShell 7, and VC++ redistributable. Optimizer kits still wait for Apply/Repair.
 # Prefer the double-click asset from Releases when you already have it.
 # One-liner stays supported: irm <raw Install-Exo.ps1 url> | iex
@@ -18,11 +19,11 @@ if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'Window
 
 $Repo = 'ImAvgErix/ExoHub'
 Write-Host ''
-Write-Host '  Exo - downloading Exo.exe...' -ForegroundColor Cyan
+Write-Host '  Exo Hub - downloading installer...' -ForegroundColor Cyan
 Write-Host ''
 
 $headers = @{
-    'User-Agent' = 'Exo-Installer/2.0'
+    'User-Agent' = 'ExoHub-Installer/2.1'
     'Accept'     = 'application/vnd.github+json'
 }
 
@@ -33,10 +34,17 @@ if (-not [version]::TryParse($releaseVersion, [ref]$parsedReleaseVersion) -or
     $parsedReleaseVersion.Build -lt 0) {
     throw "Latest release has invalid version metadata: '$($release.tag_name)'"
 }
-$asset = @($release.assets) | Where-Object { $_.name -eq 'Exo.exe' } | Select-Object -First 1
+# Product ships as ExoHub.exe; keep Exo.exe as a legacy alias for mirrors/older tags.
+$asset = @($release.assets) |
+    Where-Object { $_.name -in @('ExoHub.exe', 'Exo.exe') } |
+    Sort-Object { if ($_.name -eq 'ExoHub.exe') { 0 } else { 1 } } |
+    Select-Object -First 1
 if (-not $asset) {
-    throw "Latest release has no Exo.exe. Open: https://github.com/$Repo/releases/latest"
+    throw "Latest release has no ExoHub.exe (or Exo.exe). Open: https://github.com/$Repo/releases/latest"
 }
+$assetLabel = [string]$asset.name
+Write-Host "  Asset: $assetLabel" -ForegroundColor DarkGray
+
 
 # Never go backwards without being told to. "Latest release" is not the same thing as
 # "newer than this machine": a rig running a local build is ahead of every published
@@ -55,14 +63,14 @@ if (-not $Force -and (Test-Path -LiteralPath $installedExe)) {
     }
 }
 
-$sfx = Join-Path $env:TEMP ('Exo-setup-' + [guid]::NewGuid().ToString('N') + '.exe')
+$sfx = Join-Path $env:TEMP ('ExoHub-setup-' + [guid]::NewGuid().ToString('N') + '.exe')
 Write-Host "[*] $($release.tag_name) -> $sfx" -ForegroundColor DarkGray
-Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $sfx -UseBasicParsing -Headers @{ 'User-Agent' = 'Exo-Installer/2.0' } -TimeoutSec 300
+Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $sfx -UseBasicParsing -Headers @{ 'User-Agent' = 'ExoHub-Installer/2.1' } -TimeoutSec 300
 
 $downloaded = Get-Item -LiteralPath $sfx
 if ($asset.size -and $downloaded.Length -ne [long]$asset.size) {
     Remove-Item -LiteralPath $sfx -Force -ErrorAction SilentlyContinue
-    throw "Downloaded Exo.exe has the wrong size ($($downloaded.Length); expected $($asset.size))."
+    throw "Downloaded $assetLabel has the wrong size ($($downloaded.Length); expected $($asset.size))."
 }
 
 # GitHub release assets expose a server-computed SHA-256 digest. Require it so a
@@ -70,13 +78,13 @@ if ($asset.size -and $downloaded.Length -ne [long]$asset.size) {
 $expectedDigest = [string]$asset.digest
 if ($expectedDigest -notmatch '^sha256:[0-9a-fA-F]{64}$') {
     Remove-Item -LiteralPath $sfx -Force -ErrorAction SilentlyContinue
-    throw 'GitHub did not provide a valid SHA-256 digest for Exo.exe.'
+    throw "GitHub did not provide a valid SHA-256 digest for $assetLabel."
 }
 $expectedHash = $expectedDigest.Substring('sha256:'.Length).ToLowerInvariant()
 $actualHash = (Get-FileHash -LiteralPath $sfx -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($actualHash -ne $expectedHash) {
     Remove-Item -LiteralPath $sfx -Force -ErrorAction SilentlyContinue
-    throw 'Downloaded Exo.exe failed its SHA-256 integrity check.'
+    throw "Downloaded $assetLabel failed its SHA-256 integrity check."
 }
 
 $fileVersionText = (Get-Item -LiteralPath $sfx).VersionInfo.FileVersion
@@ -93,8 +101,9 @@ if ($parsedReleaseVersion -ge [version]'1.5.0' -and $versionMismatch) {
 }
 
 Write-Host '[*] Launching installer...' -ForegroundColor DarkGray
-Start-Process -FilePath $sfx
-Write-Host '[+] Installer launched - complete any SmartScreen prompt, then Exo should open.' -ForegroundColor Green
+# NSIS release assets honor /S; the managed ExoSfx honors /silent. Pass both so either packaging works.
+Start-Process -FilePath $sfx -ArgumentList @('/S', '/silent')
+Write-Host '[+] Installer launched - complete any SmartScreen prompt, then Exo Hub should open.' -ForegroundColor Green
 
 Write-Host '[+] Done.' -ForegroundColor Green
 Write-Host ''

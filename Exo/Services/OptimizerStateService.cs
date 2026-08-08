@@ -375,11 +375,12 @@ public sealed class OptimizerStateService
             debloatVerifiedSameApp);
         features.Add(MakeFeature("Client debloat", "", debloatOk));
 
-        var runtimeOk = new[]
-        {
-            "discord_desktop_core-1", "discord_utils-1", "discord_voice-1", "discord_media-1"
-        }.All(name => Directory.Exists(Path.Combine(modulesPath, name)));
-        features.Add(MakeFeature("Runtime modules", "", runtimeOk));
+        var missingRuntime = DiscordLogic.MissingRequiredRuntimeModules(modulesPath);
+        var runtimeOk = missingRuntime.Count == 0;
+        var runtimeDetail = runtimeOk
+            ? "Voice, media, and desktop modules are present (any Discord version suffix)."
+            : "Missing: " + string.Join(", ", missingRuntime);
+        features.Add(MakeFeature("Runtime modules", runtimeDetail, runtimeOk));
 
         var amoledOk = false;
         var settingsPath = Path.Combine(appData, "discord", "settings.json");

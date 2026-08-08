@@ -39,7 +39,7 @@ public sealed class GitHubUpdateService
 
         try
         {
-            using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/repos/ImAvgErix/Exo/releases/latest");
+            using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/repos/ImAvgErix/ExoHub/releases/latest");
             req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
             using var resp = await Http.SendAsync(req, ct);
             if (!resp.IsSuccessStatusCode)
@@ -98,7 +98,17 @@ public sealed class GitHubUpdateService
                         ? NormalizeSha256(digestElement.GetString())
                         : null;
 
-                    if (string.Equals(name, "Exo.exe", StringComparison.OrdinalIgnoreCase))
+                    // Prefer ExoHub.exe (product name); keep Exo.exe as legacy alias.
+                    if (string.Equals(name, "ExoHub.exe", StringComparison.OrdinalIgnoreCase))
+                    {
+                        exeUrl = url;
+                        exeSize = size;
+                        exeSha256 = digest;
+                        break;
+                    }
+
+                    if (exeUrl is null &&
+                        string.Equals(name, "Exo.exe", StringComparison.OrdinalIgnoreCase))
                     {
                         exeUrl = url;
                         exeSize = size;
@@ -121,16 +131,16 @@ public sealed class GitHubUpdateService
                     AlreadyLatest = true,
                     LocalVersion = localText,
                     RemoteVersion = remote,
-                    Message = $"Exo is up to date (v{localText}).",
+                    Message = $"Exo Hub is up to date (v{localText}).",
                     ReleaseSummary = summary
                 };
             }
 
             var headline = downloadUrl is null
-                ? $"Exo v{remote} exists, but its Exo.exe release asset is missing. Nothing will be downloaded."
+                ? $"Exo Hub v{remote} exists, but its installer asset (ExoHub.exe / Exo.exe) is missing. Nothing will be downloaded."
                 : sha256 is null
-                    ? $"Exo v{remote} is available, but GitHub did not publish its SHA-256 digest. Install is blocked."
-                    : $"Exo v{remote} is available (you have v{localText}).";
+                    ? $"Exo Hub v{remote} is available, but GitHub did not publish its SHA-256 digest. Install is blocked."
+                    : $"Exo Hub v{remote} is available (you have v{localText}).";
             // Include TLDR in Message for WebView settings line + logs.
             var messageWithTldr = string.IsNullOrWhiteSpace(summary)
                 ? headline
@@ -386,7 +396,7 @@ public sealed class GitHubUpdateService
                     UpdateAvailable = true,
                     LocalVersion = check.LocalVersion,
                     RemoteVersion = check.RemoteVersion,
-                    Message = "Could not start the updater. Download Exo.exe from GitHub Releases and run it."
+                    Message = "Could not start the updater. Download ExoHub.exe from GitHub Releases and run it."
                 };
             }
 

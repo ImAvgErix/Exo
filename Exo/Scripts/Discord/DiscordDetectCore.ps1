@@ -246,6 +246,44 @@ function Test-DiscOptModuleDirHasPayload {
     }
 }
 
+# Discord bumps module folder suffixes (discord_desktop_core-1 → -2). Require family prefixes only.
+$script:DiscOptRequiredRuntimePrefixes = @(
+    'discord_desktop_core',
+    'discord_utils',
+    'discord_voice',
+    'discord_media'
+)
+
+function Get-DiscOptMissingRuntimeModules {
+    param([AllowNull()][string]$ModulesPath)
+    if ([string]::IsNullOrWhiteSpace($ModulesPath) -or -not (Test-Path -LiteralPath $ModulesPath)) {
+        return @($script:DiscOptRequiredRuntimePrefixes)
+    }
+    $dirs = @()
+    try {
+        $dirs = @(Get-ChildItem -LiteralPath $ModulesPath -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
+    } catch {
+        return @($script:DiscOptRequiredRuntimePrefixes)
+    }
+    $missing = [System.Collections.Generic.List[string]]::new()
+    foreach ($prefix in $script:DiscOptRequiredRuntimePrefixes) {
+        $found = $false
+        foreach ($name in $dirs) {
+            if ($name -ieq $prefix -or $name.StartsWith("$prefix-", [StringComparison]::OrdinalIgnoreCase)) {
+                $found = $true
+                break
+            }
+        }
+        if (-not $found) { $missing.Add($prefix) }
+    }
+    return @($missing)
+}
+
+function Test-DiscOptRuntimeModulesPresent {
+    param([AllowNull()][string]$ModulesPath)
+    return (@(Get-DiscOptMissingRuntimeModules -ModulesPath $ModulesPath).Count -eq 0)
+}
+
 <#
 .SYNOPSIS
   Complete client debloat classifier (aligned with DiscordLogic.IsClientDebloatApplied).

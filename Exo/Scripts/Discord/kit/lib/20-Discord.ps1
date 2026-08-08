@@ -395,8 +395,25 @@ function Wait-DiscordReady {
 function Test-DiscordModulesReady([string]$AppDir) {
     $modPath = Join-Path $AppDir 'modules'
     if (-not (Test-Path $modPath)) { return $false }
-    foreach ($name in $RequiredModules) {
-        if (-not (Test-Path (Join-Path $modPath $name))) { return $false }
+    # Prefer version-agnostic family prefixes (desktop_core-2 counts as healthy).
+    if (Get-Command Test-DiscOptRuntimeModulesPresent -ErrorAction SilentlyContinue) {
+        return [bool](Test-DiscOptRuntimeModulesPresent -ModulesPath $modPath)
+    }
+    $prefixes = if (Get-Variable -Name RequiredModulePrefixes -ErrorAction SilentlyContinue) {
+        @($RequiredModulePrefixes)
+    } else {
+        @('discord_desktop_core', 'discord_utils', 'discord_voice', 'discord_media')
+    }
+    $dirs = @(Get-ChildItem -LiteralPath $modPath -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
+    foreach ($prefix in $prefixes) {
+        $found = $false
+        foreach ($name in $dirs) {
+            if ($name -ieq $prefix -or $name.StartsWith("$prefix-", [StringComparison]::OrdinalIgnoreCase)) {
+                $found = $true
+                break
+            }
+        }
+        if (-not $found) { return $false }
     }
     return $true
 }
@@ -888,7 +905,12 @@ function Initialize-DiscordModules([string]$AppDir) {
             return
         }
             if (((Get-Date) - $lastMsg).TotalSeconds -ge 10) {
-                $missing = @($RequiredModules | Where-Object { -not (Test-Path (Join-Path $AppDir "modules\$_")) })
+                $modWait = Join-Path $AppDir 'modules'
+                $missing = if (Get-Command Get-DiscOptMissingRuntimeModules -ErrorAction SilentlyContinue) {
+                    @(Get-DiscOptMissingRuntimeModules -ModulesPath $modWait)
+                } else {
+                    @($RequiredModules | Where-Object { -not (Test-Path (Join-Path $AppDir "modules\$_")) })
+                }
                 Write-LogLine 'STEP' "Waiting for modules: $($missing -join ', ')"
                 $lastMsg = Get-Date
             }

@@ -544,7 +544,14 @@ function Ensure-RuntimeModules([string]$AppDir) {
             Write-Ok "$name module installed"
         } catch {
             $folderName = "$name-1"
-            $isBootCritical = (@($RequiredModules) -contains $folderName) -or (@($RequiredModules) -contains $name)
+            $prefixes = if (Get-Variable -Name RequiredModulePrefixes -ErrorAction SilentlyContinue) {
+                @($RequiredModulePrefixes)
+            } else {
+                @('discord_desktop_core', 'discord_utils', 'discord_voice', 'discord_media')
+            }
+            $isBootCritical = (@($RequiredModules) -contains $folderName) -or
+                (@($RequiredModules) -contains $name) -or
+                (@($prefixes) -contains $name)
             if ($isBootCritical) { throw }
 
             $msg = "$name module skipped: $($_.Exception.Message)"

@@ -27,7 +27,6 @@ import {
 import { applyTextTheme, readCachedTextTheme, textThemeFrom, type TextTheme } from '../lib/exoTheme'
 
 const LOGO = './assets/logos/'
-const LOGO2 = './logos/'
 
 type ModuleState = 'applied' | 'ready' | 'blocked' | 'missing' | 'partial' | 'checking'
 type MarkFit = 'default' | 'wide' | 'tight'
@@ -114,7 +113,7 @@ const MODULES: ModuleDef[] = [
       'Applies adapter power settings that stop link sleep',
       'Leaves a one-click path back to throughput mode',
     ],
-    logo: LOGO2 + 'internet.png',
+    logo: LOGO + 'internet.png',
     invert: false,
     fit: 'default',
     plate: 'linear-gradient(160deg,#818cf8,#4f46e5 55%,#312e81)',
@@ -517,20 +516,34 @@ export function ExoApp() {
       }>
     // Live detect rows carry real numbers (driver 610.88, BIOS rev, chipset package…).
     // Always prefer title + detail — title-only hid chipset/driver versions.
+    // Prioritize checkable rows that are still off so Partial honesty is never
+    // truncated behind a wall of green info lines (slice used to hide the miss).
     if (moduleStatus?.features?.length) {
-      return moduleStatus.features.slice(0, 7).map((f, i) => {
+      const isInfoTitle = (title: string) =>
+        /\(info\)$/i.test(title) ||
+        /\(firmware\)$/i.test(title) ||
+        /^(CPU|Radeon GPU|AMD platform|Control Panel access|Matched to your display)\b/i.test(
+          title,
+        )
+      const ranked = [...moduleStatus.features].sort((a, b) => {
+        const aTitle = (a.title || '').trim()
+        const bTitle = (b.title || '').trim()
+        const aInfo = isInfoTitle(aTitle)
+        const bInfo = isInfoTitle(bTitle)
+        const aOff = a.active === false && !aInfo
+        const bOff = b.active === false && !bInfo
+        if (aOff !== bOff) return aOff ? -1 : 1
+        if (aInfo !== bInfo) return aInfo ? 1 : -1
+        return 0
+      })
+      return ranked.slice(0, 10).map((f, i) => {
         const title = (f.title || '').trim()
         const detail = (f.detail || '').trim()
         const text =
           title && detail && !detail.toLowerCase().startsWith(title.toLowerCase())
             ? `${title}: ${detail}`
             : title || detail
-        const info =
-          /\(info\)$/i.test(title) ||
-          /\(firmware\)$/i.test(title) ||
-          /^(CPU|Radeon GPU|AMD platform|Control Panel access|Matched to your display)\b/i.test(
-            title,
-          )
+        const info = isInfoTitle(title)
         return { key: `${title}-${i}`, text, active: f.active, info }
       }).filter((x) => x.text)
     }
@@ -732,12 +745,12 @@ export function ExoApp() {
               <MenuRow
                 icon={<ExternalLink className="size-4" />}
                 label="Documentation"
-                href="https://github.com/ImAvgErix/Exo"
+                href="https://github.com/ImAvgErix/ExoHub"
               />
               <MenuRow
                 icon={<Shield className="size-4" />}
                 label="Changelog"
-                href="https://github.com/ImAvgErix/Exo/releases"
+                href="https://github.com/ImAvgErix/ExoHub/releases"
               />
             </div>
           )}

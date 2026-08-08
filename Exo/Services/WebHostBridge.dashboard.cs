@@ -529,7 +529,7 @@ public sealed partial class WebHostBridge
 
     public const string BuyMeACoffeeUrl = "https://www.buymeacoffee.com/UhhErix";
 
-    public const string IssuesUrl = "https://github.com/ImAvgErix/Exo/issues";
+    public const string IssuesUrl = "https://github.com/ImAvgErix/ExoHub/issues";
 
 
 

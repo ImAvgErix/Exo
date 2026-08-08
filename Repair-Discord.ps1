@@ -1,11 +1,11 @@
 # Repair-Discord.ps1 - public one-liner entry for stock Discord reset.
 # Prefer the Exo in-app Repair button when available.
 #
-#   irm "https://raw.githubusercontent.com/ImAvgErix/Exo/main/Repair-Discord.ps1" | iex
+#   irm "https://raw.githubusercontent.com/ImAvgErix/ExoHub/main/Repair-Discord.ps1" | iex
 #
 # Full logout reset:
 #   $env:EXO_REPAIR_FULL = '1'
-#   irm "https://raw.githubusercontent.com/ImAvgErix/Exo/main/Repair-Discord.ps1" | iex
+#   irm "https://raw.githubusercontent.com/ImAvgErix/ExoHub/main/Repair-Discord.ps1" | iex
 
 $ErrorActionPreference = 'Stop'
 $env:EXO = '1'
@@ -31,7 +31,7 @@ try {
 
     if (-not $repair) {
         # Download the canonical non-interactive repair script from the repo.
-        $url = 'https://raw.githubusercontent.com/ImAvgErix/Exo/main/Exo/Scripts/Discord/Exo-Discord-Repair.ps1'
+        $url = 'https://raw.githubusercontent.com/ImAvgErix/ExoHub/main/Exo/Scripts/Discord/Exo-Discord-Repair.ps1'
         $tmp = Join-Path ([IO.Path]::GetTempPath()) ('Exo-Discord-Repair-' + [guid]::NewGuid().ToString('N') + '.ps1')
         Write-Host '[*] Downloading Exo Discord repair script...' -ForegroundColor Cyan
         Invoke-WebRequest -Uri $url -OutFile $tmp -UseBasicParsing -TimeoutSec 60 -Headers @{ 'User-Agent' = 'Exo-Repair/1.0' }

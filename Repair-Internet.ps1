@@ -2,9 +2,9 @@
 # Prefer the Exo in-app Repair button when available.
 #
 # ONLINE (phone hotspot OK if Wi-Fi/Ethernet is dead):
-#   irm "https://raw.githubusercontent.com/ImAvgErix/Exo/main/Repair-Internet.ps1" | iex
+#   irm "https://raw.githubusercontent.com/ImAvgErix/ExoHub/main/Repair-Internet.ps1" | iex
 #   # or hard nuclear (winsock + IP reset - reboot required):
-#   iex "& { $(irm 'https://raw.githubusercontent.com/ImAvgErix/Exo/main/Repair-Internet.ps1') } -Hard"
+#   iex "& { $(irm 'https://raw.githubusercontent.com/ImAvgErix/ExoHub/main/Repair-Internet.ps1') } -Hard"
 #
 # OFFLINE (no download - paste into elevated PowerShell):
 #   Set-ExecutionPolicy Bypass -Scope Process -Force
@@ -514,7 +514,7 @@ try {
         try { $selfText = $MyInvocation.MyCommand.ScriptBlock.ToString() } catch { $selfText = $null }
         if ([string]::IsNullOrWhiteSpace($selfText)) {
             # Last resort: download the canonical script from the repo.
-            $url = 'https://raw.githubusercontent.com/ImAvgErix/Exo/main/Repair-Internet.ps1'
+            $url = 'https://raw.githubusercontent.com/ImAvgErix/ExoHub/main/Repair-Internet.ps1'
             Write-RepairStep 'Downloading Exo Internet repair script...'
             Invoke-WebRequest -Uri $url -OutFile $tmp -UseBasicParsing -TimeoutSec 60 -Headers @{ 'User-Agent' = 'Exo-Repair/1.0' }
             $downloaded = Get-Content -LiteralPath $tmp -Raw -Encoding UTF8
