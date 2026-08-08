@@ -988,14 +988,33 @@ export function ExoApp() {
 }
 
 function LogoImg({ m }: { m: ModuleDef }) {
+  const [broken, setBroken] = useState(false)
+  // Prefer the declared mark; if the asset 404s, fall back to legacy ./logos/
+  // then to a letter plate so the rail never shows an empty broken-image icon.
+  const primary = m.logo
+  const legacy =
+    primary.includes('/assets/logos/')
+      ? primary.replace('/assets/logos/', '/logos/')
+      : primary.startsWith('./assets/logos/')
+        ? primary.replace('./assets/logos/', './logos/')
+        : null
+  const src = broken && legacy ? legacy : primary
+  if (broken && !legacy) {
+    return (
+      <span className="grid size-full place-items-center text-[13px] font-bold text-fg/80" aria-hidden>
+        {(m.label || '?').slice(0, 1)}
+      </span>
+    )
+  }
   return (
     <img
-      src={m.logo}
+      src={src}
       alt=""
       draggable={false}
       data-wide={m.fit === 'wide' ? 'true' : undefined}
       data-tight={m.fit === 'tight' ? 'true' : undefined}
       style={m.invert ? { filter: 'brightness(0) invert(1)' } : undefined}
+      onError={() => setBroken(true)}
     />
   )
 }
