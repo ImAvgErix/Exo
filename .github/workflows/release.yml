@@ -1,4 +1,4 @@
-﻿name: Release
+name: Release
 
 # Stable releases are built once from the immutable event SHA. The validated
 # installer and its checksum cross the job boundary as one Actions artifact;
@@ -132,7 +132,7 @@ jobs:
           ref: ${{ github.sha }}
 
       - name: Download the validated installer
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: exo-release-${{ github.sha }}
           path: release
