@@ -452,7 +452,9 @@ if (File.Exists(modulesTs))
     // assertion: a row that lost its logo would fall back to nothing at all.
     foreach (var logo in new[] { "nvidia", "amd", "windows", "steam", "discord", "spotify", "brave" })
         Expect($"module table imports the {logo} logo",
-            mods.Contains($"/logos/{logo}.", StringComparison.Ordinal));
+            mods.Contains($"/logos/{logo}.", StringComparison.Ordinal)
+            || mods.Contains($"logos/{logo}.", StringComparison.Ordinal));
+    // ExoApp ships Internet via ./assets/logos/internet.png (public → wwwroot), not a modules.ts import.
     Expect("brand rows use artwork, not glyph slugs",
         !mods.Contains("slug:", StringComparison.Ordinal));
     // The two modules with a real choice must ask before acting, and send the answer.
@@ -481,7 +483,7 @@ if (File.Exists(tokensCss))
     Expect("brand artwork is committed", Directory.Exists(logoDir));
     if (Directory.Exists(logoDir))
     {
-        foreach (var logo in new[] { "nvidia", "amd", "windows", "steam", "discord", "spotify", "brave" })
+        foreach (var logo in new[] { "nvidia", "amd", "windows", "steam", "discord", "spotify", "brave", "internet" })
             Expect($"{logo} artwork present",
                 Directory.GetFiles(logoDir, logo + ".*").Length > 0);
         var heavy = Directory.GetFiles(logoDir)
@@ -489,6 +491,12 @@ if (File.Exists(tokensCss))
             .Select(Path.GetFileName).ToArray();
         Expect("no oversized logo file", heavy.Length == 0, string.Join(", ", heavy));
     }
+    // Runtime path the AMOLED shell loads for Internet (./assets/logos/internet.png).
+    Expect("internet logo ships in ui/public/assets/logos",
+        File.Exists(Path.Combine(repo, "ui", "public", "assets", "logos", "internet.png")));
+    Expect("internet logo ships in wwwroot/assets/logos",
+        File.Exists(Path.Combine(repo, "Exo", "wwwroot", "assets", "logos", "internet.png")));
+
     var uiPkgJson = Path.Combine(repo, "ui", "package.json");
     if (File.Exists(uiPkgJson))
     {

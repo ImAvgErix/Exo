@@ -999,8 +999,18 @@ if (steamBytes > 80_000 || nvBytes > 80_000)
     Expect("Install-Exo prefers ExoHub.exe",
         installPs1.Contains("ExoHub.exe", StringComparison.Ordinal)
         && installPs1.Contains("ImAvgErix/ExoHub", StringComparison.Ordinal));
-    Expect("internet module logo ships under assets/logos",
-        File.Exists(Path.Combine(repo, "ui", "src", "assets", "logos", "internet.png")));
+    // ExoApp.tsx loads module marks as './assets/logos/<file>' from the packed wwwroot.
+    // ui/src alone is not enough — Vite public + committed wwwroot must carry the same file.
+    var internetLogoSrc = Path.Combine(repo, "ui", "src", "assets", "logos", "internet.png");
+    var internetLogoPublic = Path.Combine(repo, "ui", "public", "assets", "logos", "internet.png");
+    var internetLogoWwwroot = Path.Combine(repo, "Exo", "wwwroot", "assets", "logos", "internet.png");
+    Expect("internet module logo in ui/src assets", File.Exists(internetLogoSrc));
+    Expect("internet module logo in ui/public assets (Vite runtime path)", File.Exists(internetLogoPublic));
+    Expect("internet module logo in shipped wwwroot assets/logos", File.Exists(internetLogoWwwroot));
+    var exoAppUi = File.ReadAllText(Path.Combine(repo, "ui", "src", "components", "ExoApp.tsx"));
+    Expect("ExoApp Internet row uses ./assets/logos/internet.png",
+        exoAppUi.Contains("LOGO + 'internet.png'", StringComparison.Ordinal)
+        || exoAppUi.Contains("./assets/logos/internet.png", StringComparison.Ordinal));
     Expect("5600X maps to AM4",
         ChipsetDriverLogic.InferSocket("AMD Ryzen 5 5600X 6-Core Processor", "amd") == "AM4");
     Expect("7800X3D maps to AM5",
