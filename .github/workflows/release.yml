@@ -1,4 +1,4 @@
-﻿name: Release
+name: Release
 
 # Stable releases are built once from the immutable event SHA. The validated
 # installer and its checksum cross the job boundary as one Actions artifact;
@@ -110,7 +110,7 @@ jobs:
           }
 
       - name: Upload immutable installer, checksum and SBOM
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: exo-release-${{ github.sha }}
           path: |
