@@ -1,5 +1,9 @@
 # Exo Hub
 
+<p align="center">
+  <img src="docs/media/logo.png" alt="Exo Hub" width="96" />
+</p>
+
 **Presence without weight.**
 
 Exo Hub is a **Windows gaming optimizer** that finds what is on your PC, applies only what helps, and checks that it stuck — without bloatware, accounts, or folklore tweak packs.

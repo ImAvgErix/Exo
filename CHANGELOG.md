@@ -1,3 +1,10 @@
+## 1.0.1
+
+**Distinct Exo Hub brand mark.**
+
+- New app icon and logo: cyan orbital hub (no longer the shared monogram).
+- README brand mark; favicon update for the WebView shell.
+
 ## 4.8.14
 
 **AMD chipset NVCleanstall-style silent install on Apply.**
@@ -756,5 +763,6 @@ Real logs from a real machine found things no test here could.
 ---
 
 Older releases (4.2.9 and earlier) are in [docs/CHANGELOG-ARCHIVE.md](docs/CHANGELOG-ARCHIVE.md).
+
 
 
